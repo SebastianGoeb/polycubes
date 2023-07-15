@@ -1,3 +1,5 @@
+use polycubes::generate_polycubes;
+
 fn main() {
-    println!("Hello, world!");
+    generate_polycubes();
 }
