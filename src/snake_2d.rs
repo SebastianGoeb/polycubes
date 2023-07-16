@@ -3,13 +3,9 @@ use std::cmp::{max, min};
 use ndarray::*;
 use rand::{seq::SliceRandom, thread_rng};
 
-pub fn generate_polycubes_naive() {
-    generate_polycubes(9)
-}
-
-fn generate_polycubes(size: usize) {
-    let shape = grow_random_shape(2, size);
-    println!("{:#?}", shape.crop());
+pub fn generate_snake_2d(n: usize) {
+    let shape = grow_random_snake_2d(n);
+    println!("{:?}", shape.crop());
 }
 
 #[derive(Debug, Clone)]
@@ -33,7 +29,7 @@ impl Shape {
     }
 }
 
-fn grow_random_shape(_dim: usize, size: usize) -> Shape {
+fn grow_random_snake_2d(size: usize) -> Shape {
     // allow enough space to grow linearly in any direction
     let grid_size = size * 2 - 1;
     let mut grid = Array2::<u8>::zeros((grid_size, grid_size));

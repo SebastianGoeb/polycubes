@@ -1,17 +1,16 @@
 mod cli;
-mod naive;
-mod smart;
+mod poly_2d;
+mod snake_2d;
 
-use cli::parse_args;
-use naive::generate_polycubes_naive;
-use smart::generate_polycubes_smart;
+use cli::parse_cli;
+use poly_2d::generate_polys_2d;
+use snake_2d::generate_snake_2d;
 
 pub fn generate_polycubes() {
-    let args = parse_args();
+    let cli = parse_cli();
 
-    match args.algorithm.as_ref() {
-        "naive" => generate_polycubes_naive(),
-        "smart" => generate_polycubes_smart(),
-        alg => println!("unknown algorithm {}", alg),
+    match cli.command {
+        cli::Commands::Snake2d { n } => generate_snake_2d(n),
+        cli::Commands::Poly2d { max_n } => generate_polys_2d(max_n),
     }
 }
