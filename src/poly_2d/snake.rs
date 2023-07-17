@@ -3,30 +3,11 @@ use std::cmp::{max, min};
 use ndarray::*;
 use rand::{seq::SliceRandom, thread_rng};
 
+use super::common::{BoundingBox, Shape};
+
 pub fn generate_snake_2d(n: usize) {
     let shape = grow_random_snake_2d(n);
     println!("{:?}", shape.crop());
-}
-
-#[derive(Debug, Clone)]
-struct BoundingBox {
-    min_x: usize,
-    min_y: usize,
-    max_x: usize,
-    max_y: usize,
-}
-
-#[derive(Debug)]
-struct Shape {
-    grid: Array2<u8>,
-    bounds: BoundingBox,
-}
-
-impl Shape {
-    fn crop(&self) -> ArrayView2<u8> {
-        let b = self.bounds.clone();
-        self.grid.slice(s![b.min_x..=b.max_x, b.min_y..=b.max_y])
-    }
 }
 
 fn grow_random_snake_2d(size: usize) -> Shape {
