@@ -22,7 +22,7 @@ pub fn generate_polys_2d(cli: Poly2d) {
     }
 }
 
-static MOVES: [&'static (i32, i32); 4] = [&(0, 1), &(0, -1), &(1, 0), &(-1, 0)];
+static MOVES: [&(i32, i32); 4] = [&(0, 1), &(0, -1), &(1, 0), &(-1, 0)];
 
 fn generate_generation(n: usize, known_polys: &HashMap<usize, Vec<Shape>>) -> Vec<Shape> {
     let start = Instant::now();
@@ -69,13 +69,13 @@ fn generate_generation(n: usize, known_polys: &HashMap<usize, Vec<Shape>>) -> Ve
         dur.as_secs(),
         new_polys.len() as f64 * 1000.0 / dur.as_millis() as f64
     );
-    return new_polys;
+    new_polys
 }
 
 fn is_duplicate(polys: &Vec<Shape>, poly: &Shape) -> bool {
     return polys.iter().any(|other| {
-        let other_shape = other.to_grid().shape().into_iter().sorted().collect_vec();
-        let poly_shape = poly.to_grid().shape().into_iter().sorted().collect_vec();
+        let other_shape = other.to_grid().shape().iter().sorted().collect_vec();
+        let poly_shape = poly.to_grid().shape().iter().sorted().collect_vec();
         if other_shape != poly_shape {
             return false;
         }
@@ -104,10 +104,10 @@ struct Shape {
 
 impl Shape {
     fn from(points: Vec<(i32, i32)>) -> Shape {
-        return Shape {
+        Shape {
             points,
             grid: OnceCell::new(),
-        };
+        }
     }
 
     // TODO i32 overkill, can be bool or u8?
@@ -125,7 +125,7 @@ impl Shape {
                 grid[((p.0 - min_x) as usize, (p.1 - min_y) as usize)] = 1;
             }
 
-            return grid;
+            grid
         });
     }
 }

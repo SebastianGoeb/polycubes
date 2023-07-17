@@ -41,7 +41,7 @@ fn grow_random_snake_2d(size: usize) -> Shape {
                     (location.1 as isize + direction.1) as usize,
                 )
             })
-            .find(|new_location| grid[new_location.clone()] == 0);
+            .find(|new_location| grid[*new_location] == 0);
 
         location = new_location.expect("no available moves");
 
@@ -55,5 +55,5 @@ fn grow_random_snake_2d(size: usize) -> Shape {
         bounds.max_y = max(bounds.max_y, location.1);
     }
 
-    return Shape { grid, bounds };
+    Shape { grid, bounds }
 }

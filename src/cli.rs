@@ -25,5 +25,5 @@ pub struct Poly2d {
 }
 
 pub fn parse_cli() -> Cli {
-    return Cli::parse();
+    Cli::parse()
 }
