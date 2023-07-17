@@ -1,6 +1,5 @@
 use std::{cell::OnceCell, collections::HashMap, fmt::Display, time::Instant};
 
-use itertools::Itertools;
 use ndarray::{Array2, Axis};
 
 use crate::cli::Poly2d;
@@ -40,7 +39,7 @@ fn generate_generation(n: usize, known_polys: &HashMap<usize, Vec<Shape>>) -> Ve
     }
 
     let prev_polys: &Vec<Shape> = &known_polys[&(n - 1)];
-    let mut new_polys: Vec<Shape> = Vec::new();
+    let mut new_polys: Vec<Shape> = Vec::with_capacity(prev_polys.len() * 5);
     for prev_poly in prev_polys {
         for prev_point in &prev_poly.points {
             for m in &MOVES {
@@ -74,32 +73,36 @@ fn generate_generation(n: usize, known_polys: &HashMap<usize, Vec<Shape>>) -> Ve
 
 fn is_duplicate(polys: &Vec<Shape>, poly: &Shape) -> bool {
     return polys.iter().any(|other| {
-        let other_shape = other.to_grid().shape().iter().sorted().collect_vec();
-        let poly_shape = poly.to_grid().shape().iter().sorted().collect_vec();
-        if other_shape != poly_shape {
+        if other.dimensions() != poly.dimensions() {
             return false;
         }
 
-        let mut rot90 = other.to_grid().t();
+        if other.degrees() != poly.degrees() {
+            return false;
+        }
+
+        let mut rot90 = other.grid().t();
         rot90.invert_axis(Axis(1));
 
-        let mut rot180 = other.to_grid().view();
+        let mut rot180 = other.grid().view();
         rot180.invert_axis(Axis(0));
         rot180.invert_axis(Axis(1));
 
-        let mut rot270 = other.to_grid().t();
+        let mut rot270 = other.grid().t();
         rot270.invert_axis(Axis(0));
 
-        other.to_grid() == poly.to_grid()
-            || rot90 == poly.to_grid()
-            || rot180 == poly.to_grid()
-            || rot270 == poly.to_grid()
+        other.grid() == poly.grid()
+            || rot90 == poly.grid()
+            || rot180 == poly.grid()
+            || rot270 == poly.grid()
     });
 }
 
 struct Shape {
     points: Vec<(i32, i32)>,
     grid: OnceCell<Array2<i32>>,
+    dimensions: OnceCell<Vec<usize>>,
+    degrees: OnceCell<Vec<usize>>,
 }
 
 impl Shape {
@@ -107,11 +110,13 @@ impl Shape {
         Shape {
             points,
             grid: OnceCell::new(),
+            dimensions: OnceCell::new(),
+            degrees: OnceCell::new(),
         }
     }
 
     // TODO i32 overkill, can be bool or u8?
-    fn to_grid(&self) -> &Array2<i32> {
+    fn grid(&self) -> &Array2<i32> {
         return self.grid.get_or_init(|| {
             let min_x: i32 = self.points.iter().map(|p| p.0).min().unwrap();
             let max_x: i32 = self.points.iter().map(|p| p.0).max().unwrap();
@@ -128,11 +133,51 @@ impl Shape {
             grid
         });
     }
+
+    fn dimensions(&self) -> &Vec<usize> {
+        return self.dimensions.get_or_init(|| {
+            let mut dims = self.grid().shape().to_vec();
+            dims.sort();
+            dims
+        });
+    }
+
+    fn degrees(&self) -> &Vec<usize> {
+        return self.degrees.get_or_init(|| {
+            let grid = self.grid();
+            let w = grid.len_of(Axis(0));
+            let h = grid.len_of(Axis(1));
+
+            let mut degrees: Vec<usize> = vec![0, 0, 0, 0, 0]; // degrees 0 to 4
+            for x in 0..w {
+                for y in 0..h {
+                    if grid[[x, y]] != 0 {
+                        let mut degree = 0;
+                        if x > 0 && grid[[x - 1, y]] != 0 {
+                            degree += 1;
+                        }
+                        if x < w - 1 && grid[[x + 1, y]] != 0 {
+                            degree += 1;
+                        }
+                        if y > 0 && grid[[x, y - 1]] != 0 {
+                            degree += 1;
+                        }
+                        if y < h - 1 && grid[[x, y + 1]] != 0 {
+                            degree += 1;
+                        }
+                        degrees[degree] += 1;
+                    }
+                }
+            }
+
+            degrees
+        });
+    }
 }
 
 impl PartialEq for Shape {
     fn eq(&self, other: &Self) -> bool {
-        self.to_grid() == other.to_grid()
+        self.grid() == other.grid()
     }
 }
 
