@@ -8,7 +8,7 @@ use crate::cli::Poly2d;
 pub fn generate_polys(cli: Poly2d) {
     print!("generating polys up to size {}", cli.max_n);
 
-    let mut known_polys: HashMap<usize, Vec<Shape>> = HashMap::new();
+    let mut known_polys: HashMap<usize, Vec<BinShape>> = HashMap::new();
     for n in 1..=cli.max_n {
         let polys = generate_polys_of_size(n, &known_polys);
         known_polys.entry(n).or_insert(polys);
@@ -18,7 +18,7 @@ pub fn generate_polys(cli: Poly2d) {
         for n in 1..=cli.max_n {
             println!("Polys with size n={}", n);
             for poly in &known_polys[&n] {
-                println!("{}", BinShape::canonical(&poly.points));
+                println!("{}", &poly);
             }
         }
     }
@@ -26,17 +26,17 @@ pub fn generate_polys(cli: Poly2d) {
 
 static MOVES: [&(i32, i32); 4] = [&(0, 1), &(0, -1), &(1, 0), &(-1, 0)];
 
-fn generate_polys_of_size(n: usize, known_polys: &HashMap<usize, Vec<Shape>>) -> Vec<Shape> {
+fn generate_polys_of_size(n: usize, known_polys: &HashMap<usize, Vec<BinShape>>) -> Vec<BinShape> {
     let start = Instant::now();
     print!("size: {: >2}... ", n);
 
     if n == 1 {
         report_performance(start, 1, 1);
-        return vec![Shape::from(vec![(0, 0)])];
+        return vec![BinShape::canonical(vec![(0, 0)])];
     }
 
-    let prev_polys: &Vec<Shape> = &known_polys[&(n - 1)];
-    let mut new_polys: Vec<Shape> = Vec::with_capacity(prev_polys.len() * 5);
+    let prev_polys: &Vec<BinShape> = &known_polys[&(n - 1)];
+    let mut new_polys: Vec<BinShape> = Vec::with_capacity(prev_polys.len() * 5);
     let mut tried = 0;
     for prev_poly in prev_polys {
         let possible_points: Vec<(i32, i32)> = prev_poly
@@ -49,12 +49,20 @@ fn generate_polys_of_size(n: usize, known_polys: &HashMap<usize, Vec<Shape>>) ->
 
         tried += possible_points.len();
         for new_point in possible_points {
-            let mut new_poly = Shape::from(prev_poly.points.clone());
-            new_poly.points.push(new_point);
+            let mut new_points = prev_poly.points.clone();
+            new_points.push(new_point);
+            let new_poly = BinShape::canonical(new_points);
 
-            if is_duplicate(&new_polys, &new_poly) {
+            if (new_polys.contains(&new_poly)) {
                 continue;
             }
+
+            // let mut new_poly = Shape::from(prev_poly.points.clone());
+            // new_poly.points.push(new_point);
+
+            // if is_duplicate(&new_polys, &new_poly) {
+            //     continue;
+            // }
 
             new_polys.push(new_poly);
         }
@@ -115,12 +123,19 @@ fn report_performance(start: Instant, tried: usize, found: usize) {
 }
 
 struct BinShape {
+    points: Vec<(i32, i32)>,
     grid: Vec<u64>,
     dimensions: (usize, usize),
 }
 
+impl PartialEq for BinShape {
+    fn eq(&self, other: &Self) -> bool {
+        self.grid == other.grid
+    }
+}
+
 impl BinShape {
-    fn canonical(points: &[(i32, i32)]) -> BinShape {
+    fn canonical(points: Vec<(i32, i32)>) -> BinShape {
         let min_0: i32 = points.iter().map(|p| p.0).min().unwrap();
         let max_0: i32 = points.iter().map(|p| p.0).max().unwrap();
         let min_1: i32 = points.iter().map(|p| p.1).min().unwrap();
@@ -128,49 +143,67 @@ impl BinShape {
         let dim_0 = (max_0 - min_0 + 1) as usize;
         let dim_1 = (max_1 - min_1 + 1) as usize;
 
-        let mut shape_0 = BinShape {
-            dimensions: (dim_0, dim_1),
-            grid: vec![0; dim_0],
-        };
+        let dims_0 = (dim_0, dim_1);
+        let mut grid_0 = vec![0; dim_0];
         points
             .iter()
             .map(|p| p.translate((-min_0, -min_1)))
-            .for_each(|p| shape_0.grid[p.0 as usize] |= 0x1 << p.1);
+            .for_each(|p| grid_0[p.0 as usize] |= 0x1 << p.1);
 
-        let mut shape_90 = BinShape {
-            dimensions: (dim_1, dim_0),
-            grid: vec![0; dim_1],
-        };
+        let dims_90 = (dim_1, dim_0);
+        let mut grid_90 = vec![0; dim_1];
         points
             .iter()
             .map(|p| p.rotate90())
             .map(|p| p.translate((max_1, -min_0)))
-            .for_each(|p| shape_90.grid[p.0 as usize] |= 0x1 << p.1);
+            .for_each(|p| grid_90[p.0 as usize] |= 0x1 << p.1);
 
-        let mut shape_180 = BinShape {
-            dimensions: (dim_0, dim_1),
-            grid: vec![0; dim_0],
-        };
+        let dims_180 = (dim_0, dim_1);
+        let mut grid_180 = vec![0; dim_0];
         points
             .iter()
             .map(|p| p.rotate180())
             .map(|p| p.translate((max_0, max_1)))
-            .for_each(|p| shape_180.grid[p.0 as usize] |= 0x1 << p.1);
+            .for_each(|p| grid_180[p.0 as usize] |= 0x1 << p.1);
 
-        let mut shape_270 = BinShape {
-            dimensions: (dim_1, dim_0),
-            grid: vec![0; dim_1],
-        };
+        let dims_270 = (dim_1, dim_0);
+        let mut grid_270 = vec![0; dim_1];
         points
             .iter()
             .map(|p| p.rotate270())
             .map(|p| p.translate((-min_1, max_0)))
-            .for_each(|p| shape_270.grid[p.0 as usize] |= 0x1 << p.1);
+            .for_each(|p| grid_270[p.0 as usize] |= 0x1 << p.1);
 
-        return vec![shape_0, shape_90, shape_180, shape_270]
-            .into_iter()
-            .max_by(|a, b| a.grid.cmp(&b.grid))
-            .unwrap();
+        let idx: usize = vec![&grid_0, &grid_90, &grid_180, &grid_270]
+            .iter()
+            .enumerate()
+            .max_by(|(_, a), (_, b)| a.cmp(&b))
+            .unwrap()
+            .0;
+
+        return match idx {
+            0 => BinShape {
+                points,
+                grid: grid_0,
+                dimensions: dims_0,
+            },
+            1 => BinShape {
+                points,
+                grid: grid_90,
+                dimensions: dims_90,
+            },
+            2 => BinShape {
+                points,
+                grid: grid_180,
+                dimensions: dims_180,
+            },
+            3 => BinShape {
+                points,
+                grid: grid_270,
+                dimensions: dims_270,
+            },
+            _ => panic!(),
+        };
     }
 }
 
