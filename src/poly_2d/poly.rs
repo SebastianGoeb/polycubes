@@ -63,7 +63,7 @@ fn generate_polys_of_size(n: usize, known_polys: &HashMap<usize, Vec<Shape>>) ->
     new_polys
 }
 
-fn is_duplicate(polys: &Vec<Shape>, poly: &Shape) -> bool {
+fn is_duplicate(polys: &[Shape], poly: &Shape) -> bool {
     return polys.iter().any(|other| {
         if other.dimensions() != poly.dimensions() {
             return false;
