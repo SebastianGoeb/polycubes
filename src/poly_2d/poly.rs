@@ -4,10 +4,12 @@ use ndarray::{Array2, Axis};
 
 use crate::cli::Poly2d;
 
-pub fn generate_polys_2d(cli: Poly2d) {
+pub fn generate_polys(cli: Poly2d) {
+    print!("generating polys up to size {}", cli.max_n);
+
     let mut known_polys: HashMap<usize, Vec<Shape>> = HashMap::new();
     for n in 1..=cli.max_n {
-        let polys = generate_generation(n, &known_polys);
+        let polys = generate_polys_of_size(n, &known_polys);
         known_polys.entry(n).or_insert(polys);
     }
 
@@ -23,26 +25,22 @@ pub fn generate_polys_2d(cli: Poly2d) {
 
 static MOVES: [&(i32, i32); 4] = [&(0, 1), &(0, -1), &(1, 0), &(-1, 0)];
 
-fn generate_generation(n: usize, known_polys: &HashMap<usize, Vec<Shape>>) -> Vec<Shape> {
+fn generate_polys_of_size(n: usize, known_polys: &HashMap<usize, Vec<Shape>>) -> Vec<Shape> {
     let start = Instant::now();
-    println!("generating polys of size {}", n);
+    print!("size: {: >2}... ", n);
 
     if n == 1 {
-        let dur = start.elapsed();
-        println!(
-            "generated {} polys in {} s ({:.0}/s)\n",
-            1,
-            dur.as_secs(),
-            1000.0 / dur.as_millis() as f64
-        );
+        report_performance(start, 1, 1);
         return vec![Shape::from(vec![(0, 0)])];
     }
 
     let prev_polys: &Vec<Shape> = &known_polys[&(n - 1)];
     let mut new_polys: Vec<Shape> = Vec::with_capacity(prev_polys.len() * 5);
+    let mut tried = 0;
     for prev_poly in prev_polys {
         for prev_point in &prev_poly.points {
             for m in &MOVES {
+                tried += 1;
                 let new_point = (prev_point.0 + m.0, prev_point.1 + m.1);
                 if prev_poly.points.contains(&new_point) {
                     // move not allowed
@@ -61,13 +59,7 @@ fn generate_generation(n: usize, known_polys: &HashMap<usize, Vec<Shape>>) -> Ve
         }
     }
 
-    let dur = start.elapsed();
-    println!(
-        "{} polys in {} s ({:.0}/s)\n",
-        new_polys.len(),
-        dur.as_secs(),
-        new_polys.len() as f64 * 1000.0 / dur.as_millis() as f64
-    );
+    report_performance(start, tried, new_polys.len());
     new_polys
 }
 
@@ -96,6 +88,29 @@ fn is_duplicate(polys: &Vec<Shape>, poly: &Shape) -> bool {
             || rot180 == poly.grid()
             || rot270 == poly.grid()
     });
+}
+
+fn report_performance(start: Instant, tried: usize, found: usize) {
+    let dur = start.elapsed();
+
+    let tried_string = format!(
+        "tried: {} ({:.0}/s)",
+        tried,
+        tried as f64 * 1000.0 / dur.as_millis() as f64
+    );
+
+    let found_string = format!(
+        "found: {} ({:.0}/s)",
+        found,
+        found as f64 * 1000.0 / dur.as_millis() as f64
+    );
+
+    println!(
+        "time: {}s {: <25} {: <25}",
+        dur.as_secs(),
+        tried_string,
+        found_string
+    );
 }
 
 struct Shape {
