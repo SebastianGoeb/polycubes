@@ -1,5 +1,6 @@
 use std::{cell::OnceCell, collections::HashMap, fmt::Display, time::Instant};
 
+use itertools::Itertools;
 use ndarray::{Array2, Axis};
 
 use crate::cli::Poly2d;
@@ -38,24 +39,24 @@ fn generate_polys_of_size(n: usize, known_polys: &HashMap<usize, Vec<Shape>>) ->
     let mut new_polys: Vec<Shape> = Vec::with_capacity(prev_polys.len() * 5);
     let mut tried = 0;
     for prev_poly in prev_polys {
-        for prev_point in &prev_poly.points {
-            for m in &MOVES {
-                tried += 1;
-                let new_point = (prev_point.0 + m.0, prev_point.1 + m.1);
-                if prev_poly.points.contains(&new_point) {
-                    // move not allowed
-                    continue;
-                }
+        let possible_points: Vec<(i32, i32)> = prev_poly
+            .points
+            .iter()
+            .flat_map(|p| MOVES.iter().map(|m| (p.0 + m.0, p.1 + m.1)))
+            .unique()
+            .filter(|p| !prev_poly.points.contains(p))
+            .collect_vec();
 
-                let mut new_poly = Shape::from(prev_poly.points.clone());
-                new_poly.points.push(new_point);
+        for new_point in possible_points {
+            tried += 1;
+            let mut new_poly = Shape::from(prev_poly.points.clone());
+            new_poly.points.push(new_point);
 
-                if is_duplicate(&new_polys, &new_poly) {
-                    continue;
-                }
-
-                new_polys.push(new_poly);
+            if is_duplicate(&new_polys, &new_poly) {
+                continue;
             }
+
+            new_polys.push(new_poly);
         }
     }
 
