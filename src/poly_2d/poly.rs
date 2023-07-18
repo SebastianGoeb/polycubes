@@ -18,7 +18,7 @@ pub fn generate_polys(cli: Poly2d) {
         for n in 1..=cli.max_n {
             println!("Polys with size n={}", n);
             for poly in &known_polys[&n] {
-                println!("{}", poly);
+                println!("{}", BinShape::canonical(&poly.points));
             }
         }
     }
@@ -47,8 +47,8 @@ fn generate_polys_of_size(n: usize, known_polys: &HashMap<usize, Vec<Shape>>) ->
             .filter(|p| !prev_poly.points.contains(p))
             .collect_vec();
 
+        tried += possible_points.len();
         for new_point in possible_points {
-            tried += 1;
             let mut new_poly = Shape::from(prev_poly.points.clone());
             new_poly.points.push(new_point);
 
@@ -112,6 +112,103 @@ fn report_performance(start: Instant, tried: usize, found: usize) {
         tried_string,
         found_string
     );
+}
+
+struct BinShape {
+    grid: Vec<u64>,
+    dimensions: (usize, usize),
+}
+
+impl BinShape {
+    fn canonical(points: &[(i32, i32)]) -> BinShape {
+        let min_0: i32 = points.iter().map(|p| p.0).min().unwrap();
+        let max_0: i32 = points.iter().map(|p| p.0).max().unwrap();
+        let min_1: i32 = points.iter().map(|p| p.1).min().unwrap();
+        let max_1: i32 = points.iter().map(|p| p.1).max().unwrap();
+        let dim_0 = (max_0 - min_0 + 1) as usize;
+        let dim_1 = (max_1 - min_1 + 1) as usize;
+
+        let mut shape_0 = BinShape {
+            dimensions: (dim_0, dim_1),
+            grid: vec![0; dim_0],
+        };
+        points
+            .iter()
+            .map(|p| p.translate((-min_0, -min_1)))
+            .for_each(|p| shape_0.grid[p.0 as usize] |= 0x1 << p.1);
+
+        let mut shape_90 = BinShape {
+            dimensions: (dim_1, dim_0),
+            grid: vec![0; dim_1],
+        };
+        points
+            .iter()
+            .map(|p| p.rotate90())
+            .map(|p| p.translate((max_1, -min_0)))
+            .for_each(|p| shape_90.grid[p.0 as usize] |= 0x1 << p.1);
+
+        let mut shape_180 = BinShape {
+            dimensions: (dim_0, dim_1),
+            grid: vec![0; dim_0],
+        };
+        points
+            .iter()
+            .map(|p| p.rotate180())
+            .map(|p| p.translate((max_0, max_1)))
+            .for_each(|p| shape_180.grid[p.0 as usize] |= 0x1 << p.1);
+
+        let mut shape_270 = BinShape {
+            dimensions: (dim_1, dim_0),
+            grid: vec![0; dim_1],
+        };
+        points
+            .iter()
+            .map(|p| p.rotate270())
+            .map(|p| p.translate((-min_1, max_0)))
+            .for_each(|p| shape_270.grid[p.0 as usize] |= 0x1 << p.1);
+
+        return vec![shape_0, shape_90, shape_180, shape_270]
+            .into_iter()
+            .max_by(|a, b| a.grid.cmp(&b.grid))
+            .unwrap();
+    }
+}
+
+impl Display for BinShape {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        for row in &self.grid {
+            for i_1 in 0..self.dimensions.1 {
+                let present = (row >> i_1) & 0x1 != 0;
+                write!(f, "{}", if present { 'O' } else { ' ' })?;
+            }
+            write!(f, "\n")?;
+        }
+
+        Ok(())
+    }
+}
+
+trait Vec2 {
+    fn rotate90(&self) -> Self;
+    fn rotate180(&self) -> Self;
+    fn rotate270(&self) -> Self;
+    fn translate(&self, t: (i32, i32)) -> Self;
+}
+
+impl Vec2 for (i32, i32) {
+    fn rotate90(&self) -> Self {
+        (-self.1, self.0)
+    }
+    fn rotate180(&self) -> Self {
+        (-self.0, -self.1)
+    }
+    fn rotate270(&self) -> Self {
+        (self.1, -self.0)
+    }
+
+    fn translate(&self, t: (i32, i32)) -> Self {
+        (self.0 + t.0, self.1 + t.1)
+    }
 }
 
 struct Shape {
