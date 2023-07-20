@@ -1,4 +1,10 @@
-use std::{cell::OnceCell, collections::HashMap, fmt::Display, time::Instant};
+use std::hash::{Hash, Hasher};
+use std::{
+    cell::OnceCell,
+    collections::{HashMap, HashSet},
+    fmt::Display,
+    time::Instant,
+};
 
 use itertools::Itertools;
 use ndarray::{Array2, Axis};
@@ -8,7 +14,7 @@ use crate::cli::Poly2d;
 pub fn generate_polys(cli: Poly2d) {
     print!("generating polys up to size {}", cli.max_n);
 
-    let mut known_polys: HashMap<usize, Vec<BinShape>> = HashMap::new();
+    let mut known_polys: HashMap<usize, HashSet<BinShape>> = HashMap::new();
     for n in 1..=cli.max_n {
         let polys = generate_polys_of_size(n, &known_polys);
         known_polys.entry(n).or_insert(polys);
@@ -26,17 +32,22 @@ pub fn generate_polys(cli: Poly2d) {
 
 static MOVES: [&(i32, i32); 4] = [&(0, 1), &(0, -1), &(1, 0), &(-1, 0)];
 
-fn generate_polys_of_size(n: usize, known_polys: &HashMap<usize, Vec<BinShape>>) -> Vec<BinShape> {
+fn generate_polys_of_size(
+    n: usize,
+    known_polys: &HashMap<usize, HashSet<BinShape>>,
+) -> HashSet<BinShape> {
     let start = Instant::now();
     print!("size: {: >2}... ", n);
 
     if n == 1 {
         report_performance(start, 1, 1);
-        return vec![BinShape::canonical(vec![(0, 0)])];
+        return vec![BinShape::canonical(vec![(0, 0)])]
+            .into_iter()
+            .collect();
     }
 
-    let prev_polys: &Vec<BinShape> = &known_polys[&(n - 1)];
-    let mut new_polys: Vec<BinShape> = Vec::with_capacity(prev_polys.len() * 5);
+    let prev_polys: &HashSet<BinShape> = &known_polys[&(n - 1)];
+    let mut new_polys: HashSet<BinShape> = HashSet::with_capacity(prev_polys.len() * 5);
     let mut tried = 0;
     for prev_poly in prev_polys {
         let possible_points: Vec<(i32, i32)> = prev_poly
@@ -53,18 +64,11 @@ fn generate_polys_of_size(n: usize, known_polys: &HashMap<usize, Vec<BinShape>>)
             new_points.push(new_point);
             let new_poly = BinShape::canonical(new_points);
 
-            if (new_polys.contains(&new_poly)) {
+            if new_polys.contains(&new_poly) {
                 continue;
             }
 
-            // let mut new_poly = Shape::from(prev_poly.points.clone());
-            // new_poly.points.push(new_point);
-
-            // if is_duplicate(&new_polys, &new_poly) {
-            //     continue;
-            // }
-
-            new_polys.push(new_poly);
+            new_polys.insert(new_poly);
         }
     }
 
@@ -122,6 +126,7 @@ fn report_performance(start: Instant, tried: usize, found: usize) {
     );
 }
 
+#[derive(Eq)]
 struct BinShape {
     points: Vec<(i32, i32)>,
     grid: Vec<u64>,
@@ -131,6 +136,15 @@ struct BinShape {
 impl PartialEq for BinShape {
     fn eq(&self, other: &Self) -> bool {
         self.grid == other.grid
+    }
+}
+
+impl Hash for BinShape {
+    fn hash<H>(&self, state: &mut H)
+    where
+        H: Hasher,
+    {
+        &self.grid.hash(state);
     }
 }
 
