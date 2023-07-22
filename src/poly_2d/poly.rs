@@ -12,6 +12,7 @@ use crate::cli::Poly2d;
 static MOVES: [&(i32, i32); 4] = [&(0, 1), &(0, -1), &(1, 0), &(-1, 0)];
 
 pub fn generate_polys(cli: Poly2d) {
+    println!("generating polycubes (in 2d) up to size {}", cli.max_n);
     let polys = generate_polys_up_to_size(cli.max_n);
 
     if cli.report_polys {
