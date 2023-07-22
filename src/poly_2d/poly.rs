@@ -9,26 +9,24 @@ use itertools::Itertools;
 
 use crate::cli::Poly2d;
 
-pub fn generate_polys(cli: Poly2d) {
-    print!("generating polys up to size {}", cli.max_n);
+static MOVES: [&(i32, i32); 4] = [&(0, 1), &(0, -1), &(1, 0), &(-1, 0)];
 
-    let mut known_polys: HashMap<usize, HashSet<BinShape>> = HashMap::new();
-    for n in 1..=cli.max_n {
-        let polys = generate_polys_of_size(n, &known_polys);
-        known_polys.entry(n).or_insert(polys);
-    }
+pub fn generate_polys(cli: Poly2d) {
+    let polys = generate_polys_up_to_size(cli.max_n);
 
     if cli.report_polys {
-        for n in 1..=cli.max_n {
-            println!("Polys with size n={}", n);
-            for poly in &known_polys[&n] {
-                println!("{}", &poly);
-            }
-        }
+        report_polys(cli, polys);
     }
 }
 
-static MOVES: [&(i32, i32); 4] = [&(0, 1), &(0, -1), &(1, 0), &(-1, 0)];
+fn generate_polys_up_to_size(max_n: usize) -> HashMap<usize, HashSet<BinShape>> {
+    let mut known_polys: HashMap<usize, HashSet<BinShape>> = HashMap::new();
+    for n in 1..=max_n {
+        let polys = generate_polys_of_size(n, &known_polys);
+        known_polys.entry(n).or_insert(polys);
+    }
+    return known_polys;
+}
 
 fn generate_polys_of_size(
     n: usize,
@@ -39,12 +37,11 @@ fn generate_polys_of_size(
 
     if n == 1 {
         report_performance(start, 1, 1);
-        return vec![BinShape::canonical(vec![(0, 0)])]
-            .into_iter()
-            .collect();
+        return HashSet::from([BinShape::canonical(vec![(0, 0)])]);
     }
 
     let prev_polys: &HashSet<BinShape> = &known_polys[&(n - 1)];
+    // each generation seems to be ~4x as large as the previous one, so we allocate some extra space to avoid growing.
     let mut new_polys: HashSet<BinShape> = HashSet::with_capacity(prev_polys.len() * 5);
     let mut tried = 0;
     for prev_poly in prev_polys {
@@ -60,41 +57,14 @@ fn generate_polys_of_size(
         for new_point in possible_points {
             let mut new_points = prev_poly.points.clone();
             new_points.push(new_point);
+
             let new_poly = BinShape::canonical(new_points);
-
-            if new_polys.contains(&new_poly) {
-                continue;
-            }
-
             new_polys.insert(new_poly);
         }
     }
 
     report_performance(start, tried, new_polys.len());
     new_polys
-}
-
-fn report_performance(start: Instant, tried: usize, found: usize) {
-    let dur = start.elapsed();
-
-    let tried_string = format!(
-        "tried: {} ({:.0}/s)",
-        tried,
-        tried as f64 * 1000.0 / dur.as_millis() as f64
-    );
-
-    let found_string = format!(
-        "found: {} ({:.0}/s)",
-        found,
-        found as f64 * 1000.0 / dur.as_millis() as f64
-    );
-
-    println!(
-        "time: {}s {: <25} {: <25}",
-        dur.as_secs(),
-        tried_string,
-        found_string
-    );
 }
 
 #[derive(Eq)]
@@ -226,5 +196,37 @@ impl Vec2 for (i32, i32) {
 
     fn translate(&self, t: (i32, i32)) -> Self {
         (self.0 + t.0, self.1 + t.1)
+    }
+}
+
+fn report_performance(start: Instant, tried: usize, found: usize) {
+    let dur = start.elapsed();
+
+    let tried_string = format!(
+        "tried: {} ({:.0}/s)",
+        tried,
+        tried as f64 * 1000.0 / dur.as_millis() as f64
+    );
+
+    let found_string = format!(
+        "found: {} ({:.0}/s)",
+        found,
+        found as f64 * 1000.0 / dur.as_millis() as f64
+    );
+
+    println!(
+        "time: {}s {: <25} {: <25}",
+        dur.as_secs(),
+        tried_string,
+        found_string
+    );
+}
+
+fn report_polys(cli: Poly2d, known_polys: HashMap<usize, HashSet<BinShape>>) {
+    for n in 1..=cli.max_n {
+        println!("Polys with size n={}", n);
+        for poly in &known_polys[&n] {
+            println!("{}", &poly);
+        }
     }
 }
