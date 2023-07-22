@@ -12,6 +12,14 @@ So far, only the 2D case has been implemented for simplicity, but extending to 3
 cargo run -r -- poly2d 15
 ```
 
+## Print generated polys
+
+Don't do this for large sizes. Many, many polys will be printed.
+
+```
+cargo run -r -- poly2d -r 4
+```
+
 ## Help
 
 ```
