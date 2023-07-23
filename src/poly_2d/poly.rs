@@ -1,3 +1,4 @@
+use std::cmp;
 use std::hash::{Hash, Hasher};
 use std::{
     collections::{HashMap, HashSet},
@@ -6,10 +7,24 @@ use std::{
 };
 
 use itertools::Itertools;
+use nalgebra::Matrix2;
+use nalgebra::{Rotation2, Vector2};
 
 use crate::cli::Poly2d;
 
-static MOVES: [&(i32, i32); 4] = [&(0, 1), &(0, -1), &(1, 0), &(-1, 0)];
+static MOVES: &[Vector2<i32>] = &[
+    Vector2::new(0, 1),
+    Vector2::new(0, -1),
+    Vector2::new(1, 0),
+    Vector2::new(-1, 0),
+];
+
+static ROTATIONS: &[Rotation2<i32>] = &[
+    Rotation2::from_matrix_unchecked(Matrix2::new(1, 0, 0, 1)), // 0 deg ccw
+    Rotation2::from_matrix_unchecked(Matrix2::new(0, -1, 1, 0)), // 90 deg ccw
+    Rotation2::from_matrix_unchecked(Matrix2::new(-1, 0, 0, -1)), // 180 deg ccw
+    Rotation2::from_matrix_unchecked(Matrix2::new(0, 1, -1, 0)), // 270 deg ccw
+];
 
 pub fn generate_polys(cli: Poly2d) {
     println!("generating polycubes (in 2d) up to size {}", cli.max_n);
@@ -38,7 +53,7 @@ fn generate_polys_of_size(
 
     if n == 1 {
         report_performance(start, 1, 1);
-        return HashSet::from([BinShape::canonical(vec![(0, 0)])]);
+        return HashSet::from([BinShape::canonical(vec![Vector2::new(0, 0)])]);
     }
 
     let prev_polys: &HashSet<BinShape> = &known_polys[&(n - 1)];
@@ -46,13 +61,16 @@ fn generate_polys_of_size(
     let mut new_polys: HashSet<BinShape> = HashSet::with_capacity(prev_polys.len() * 5);
     let mut tried = 0;
     for prev_poly in prev_polys {
-        let possible_points: Vec<(i32, i32)> = prev_poly
-            .points
-            .iter()
-            .flat_map(|p| MOVES.iter().map(|m| (p.0 + m.0, p.1 + m.1)))
-            .unique()
-            .filter(|p| !prev_poly.points.contains(p))
-            .collect_vec();
+        let mut possible_points: HashSet<Vector2<i32>> =
+            HashSet::with_capacity(prev_poly.points.len() * MOVES.len());
+        for p in &prev_poly.points {
+            for m in MOVES {
+                let new_point = p + m;
+                if !prev_poly.points.contains(&new_point) {
+                    possible_points.insert(new_point);
+                }
+            }
+        }
 
         tried += possible_points.len();
         for new_point in possible_points {
@@ -68,11 +86,79 @@ fn generate_polys_of_size(
     new_polys
 }
 
+#[derive(PartialEq, Eq, Debug)]
+struct BoundingBox {
+    p0: Vector2<i32>,
+    p1: Vector2<i32>,
+}
+
+impl BoundingBox {
+    fn from(points: &[Vector2<i32>]) -> BoundingBox {
+        return BoundingBox {
+            p0: Vector2::new(
+                points.iter().map(|p| p.x).min().unwrap(),
+                points.iter().map(|p| p.y).min().unwrap(),
+            ),
+            p1: Vector2::new(
+                points.iter().map(|p| p.x).max().unwrap(),
+                points.iter().map(|p| p.y).max().unwrap(),
+            ),
+        };
+    }
+
+    fn min(&self) -> Vector2<i32> {
+        return Vector2::new(
+            cmp::min(self.p0.x, self.p1.x),
+            cmp::min(self.p0.y, self.p1.y),
+        );
+    }
+
+    fn max(&self) -> Vector2<i32> {
+        return Vector2::new(
+            cmp::max(self.p0.x, self.p1.x),
+            cmp::max(self.p0.y, self.p1.y),
+        );
+    }
+}
+
+impl std::ops::Mul<BoundingBox> for &Rotation2<i32> {
+    type Output = BoundingBox;
+
+    fn mul(self, rhs: BoundingBox) -> Self::Output {
+        return BoundingBox {
+            p0: self * rhs.p0,
+            p1: self * rhs.p1,
+        };
+    }
+}
+
+impl std::ops::Add<Vector2<i32>> for BoundingBox {
+    type Output = BoundingBox;
+
+    fn add(self, rhs: Vector2<i32>) -> BoundingBox {
+        return BoundingBox {
+            p0: self.p0 + rhs,
+            p1: self.p1 + rhs,
+        };
+    }
+}
+
+impl std::ops::Sub<Vector2<i32>> for BoundingBox {
+    type Output = BoundingBox;
+
+    fn sub(self, rhs: Vector2<i32>) -> BoundingBox {
+        return BoundingBox {
+            p0: self.p0 - rhs,
+            p1: self.p1 - rhs,
+        };
+    }
+}
+
 #[derive(Eq)]
 struct BinShape {
-    points: Vec<(i32, i32)>,
+    points: Vec<Vector2<i32>>,
+    bounds: BoundingBox,
     grid: Vec<u64>,
-    dimensions: (usize, usize),
 }
 
 impl PartialEq for BinShape {
@@ -91,112 +177,65 @@ impl Hash for BinShape {
 }
 
 impl BinShape {
-    fn canonical(points: Vec<(i32, i32)>) -> BinShape {
-        let min_0: i32 = points.iter().map(|p| p.0).min().unwrap();
-        let max_0: i32 = points.iter().map(|p| p.0).max().unwrap();
-        let min_1: i32 = points.iter().map(|p| p.1).min().unwrap();
-        let max_1: i32 = points.iter().map(|p| p.1).max().unwrap();
-        let dim_0 = (max_0 - min_0 + 1) as usize;
-        let dim_1 = (max_1 - min_1 + 1) as usize;
-
-        let dims_0 = (dim_0, dim_1);
-        let mut grid_0 = vec![0; dim_0];
-        points
+    fn canonical(points: Vec<Vector2<i32>>) -> BinShape {
+        let (points, bounds, grid) = ROTATIONS
             .iter()
-            .map(|p| p.translate((-min_0, -min_1)))
-            .for_each(|p| grid_0[p.0 as usize] |= 0x1 << p.1);
-
-        let dims_90 = (dim_1, dim_0);
-        let mut grid_90 = vec![0; dim_1];
-        points
-            .iter()
-            .map(|p| p.rotate90())
-            .map(|p| p.translate((max_1, -min_0)))
-            .for_each(|p| grid_90[p.0 as usize] |= 0x1 << p.1);
-
-        let dims_180 = (dim_0, dim_1);
-        let mut grid_180 = vec![0; dim_0];
-        points
-            .iter()
-            .map(|p| p.rotate180())
-            .map(|p| p.translate((max_0, max_1)))
-            .for_each(|p| grid_180[p.0 as usize] |= 0x1 << p.1);
-
-        let dims_270 = (dim_1, dim_0);
-        let mut grid_270 = vec![0; dim_1];
-        points
-            .iter()
-            .map(|p| p.rotate270())
-            .map(|p| p.translate((-min_1, max_0)))
-            .for_each(|p| grid_270[p.0 as usize] |= 0x1 << p.1);
-
-        let idx: usize = vec![&grid_0, &grid_90, &grid_180, &grid_270]
-            .iter()
-            .enumerate()
-            .max_by(|(_, a), (_, b)| a.cmp(b))
-            .unwrap()
-            .0;
-
-        match idx {
-            0 => BinShape {
-                points,
-                grid: grid_0,
-                dimensions: dims_0,
-            },
-            1 => BinShape {
-                points,
-                grid: grid_90,
-                dimensions: dims_90,
-            },
-            2 => BinShape {
-                points,
-                grid: grid_180,
-                dimensions: dims_180,
-            },
-            3 => BinShape {
-                points,
-                grid: grid_270,
-                dimensions: dims_270,
-            },
-            _ => panic!(),
+            // calculate all possible rotations
+            .map(|rotation| {
+                let (points, bounds) = rotate_and_normalize_points(&points, rotation);
+                // bounds.min() should be (0, 0) at this point, and max() should be positive
+                let grid = points_to_grid(&points, &bounds);
+                (points, bounds, grid)
+            })
+            // select rotation that gives the lowest overall binary grid
+            .min_by(|(_, _, grida), (_, _, gridb)| grida.cmp(gridb))
+            .unwrap();
+        BinShape {
+            points,
+            bounds,
+            grid,
         }
     }
+}
+
+fn rotate_and_normalize_points(
+    points: &Vec<Vector2<i32>>,
+    rotation: &Rotation2<i32>,
+) -> (Vec<Vector2<i32>>, BoundingBox) {
+    let bounds = BoundingBox::from(points);
+    let bounds_rotated = rotation * bounds;
+    let bounds_rotated_min = bounds_rotated.min();
+
+    let points_rotated_normalized = points
+        .iter()
+        .map(|p| rotation * p)
+        .map(|p| p - bounds_rotated_min) // normalize points to be >= 0 in all axes
+        .collect_vec();
+    let bounds_rotated_normalized = bounds_rotated - bounds_rotated_min;
+
+    (points_rotated_normalized, bounds_rotated_normalized)
+}
+
+fn points_to_grid(points: &Vec<Vector2<i32>>, bounds: &BoundingBox) -> Vec<u64> {
+    // Row major order, so each row/u64 extends in the x direction. They are indexed in the y direction.
+    let mut grid = vec![0; bounds.max().y as usize + 1];
+    for p in points {
+        grid[p.y as usize] |= 0x1 << p.x
+    }
+    grid
 }
 
 impl Display for BinShape {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         for row in &self.grid {
-            for i_1 in 0..self.dimensions.1 {
-                let present = (row >> i_1) & 0x1 != 0;
+            for i_x in 0..self.bounds.max().x + 1 {
+                let present = (row >> i_x) & 0x1 != 0;
                 write!(f, "{}", if present { 'O' } else { ' ' })?;
             }
             writeln!(f)?;
         }
 
         Ok(())
-    }
-}
-
-trait Vec2 {
-    fn rotate90(&self) -> Self;
-    fn rotate180(&self) -> Self;
-    fn rotate270(&self) -> Self;
-    fn translate(&self, t: (i32, i32)) -> Self;
-}
-
-impl Vec2 for (i32, i32) {
-    fn rotate90(&self) -> Self {
-        (-self.1, self.0)
-    }
-    fn rotate180(&self) -> Self {
-        (-self.0, -self.1)
-    }
-    fn rotate270(&self) -> Self {
-        (self.1, -self.0)
-    }
-
-    fn translate(&self, t: (i32, i32)) -> Self {
-        (self.0 + t.0, self.1 + t.1)
     }
 }
 
