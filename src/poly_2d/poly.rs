@@ -41,7 +41,7 @@ fn generate_polys_up_to_size(max_n: usize) -> HashMap<usize, HashSet<BinShape>> 
         let polys = generate_polys_of_size(n, &known_polys);
         known_polys.entry(n).or_insert(polys);
     }
-    return known_polys;
+    known_polys
 }
 
 fn generate_polys_of_size(
@@ -107,17 +107,17 @@ impl BoundingBox {
     }
 
     fn min(&self) -> Vector2<i32> {
-        return Vector2::new(
+        Vector2::new(
             cmp::min(self.p0.x, self.p1.x),
             cmp::min(self.p0.y, self.p1.y),
-        );
+        )
     }
 
     fn max(&self) -> Vector2<i32> {
-        return Vector2::new(
+        Vector2::new(
             cmp::max(self.p0.x, self.p1.x),
             cmp::max(self.p0.y, self.p1.y),
-        );
+        )
     }
 }
 
@@ -125,10 +125,10 @@ impl std::ops::Mul<BoundingBox> for &Rotation2<i32> {
     type Output = BoundingBox;
 
     fn mul(self, rhs: BoundingBox) -> Self::Output {
-        return BoundingBox {
+        BoundingBox {
             p0: self * rhs.p0,
             p1: self * rhs.p1,
-        };
+        }
     }
 }
 
@@ -136,10 +136,10 @@ impl std::ops::Add<Vector2<i32>> for BoundingBox {
     type Output = BoundingBox;
 
     fn add(self, rhs: Vector2<i32>) -> BoundingBox {
-        return BoundingBox {
+        BoundingBox {
             p0: self.p0 + rhs,
             p1: self.p1 + rhs,
-        };
+        }
     }
 }
 
@@ -147,10 +147,10 @@ impl std::ops::Sub<Vector2<i32>> for BoundingBox {
     type Output = BoundingBox;
 
     fn sub(self, rhs: Vector2<i32>) -> BoundingBox {
-        return BoundingBox {
+        BoundingBox {
             p0: self.p0 - rhs,
             p1: self.p1 - rhs,
-        };
+        }
     }
 }
 
@@ -199,7 +199,7 @@ impl BinShape {
 }
 
 fn rotate_and_normalize_points(
-    points: &Vec<Vector2<i32>>,
+    points: &[Vector2<i32>],
     rotation: &Rotation2<i32>,
 ) -> (Vec<Vector2<i32>>, BoundingBox) {
     let bounds = BoundingBox::from(points);
