@@ -74,7 +74,9 @@ fn generate_polys_of_size(
 
         tried += possible_points.len();
         for new_point in possible_points {
-            let mut new_points = prev_poly.points.clone();
+            // cloning then pushing would force an unnecessary grow, so we initialize with the correct size
+            let mut new_points = Vec::with_capacity(prev_poly.points.len() + 1);
+            new_points.extend(&prev_poly.points);
             new_points.push(new_point);
 
             let new_poly = BinShape::canonical(new_points);
