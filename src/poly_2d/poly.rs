@@ -216,11 +216,13 @@ fn rotate_shape(
     let bounds_rotated_normalized_max = bounds_rotated_normalized.max();
 
     let mut grid = vec![0; bounds_rotated_normalized_max.y as usize + 1];
-    points
-        .iter()
-        .map(|p| rotation * p - bounds_rotated_min) // normalize points to be >= 0 in all axes
+    for p in points {
+        // normalize points to be >= 0 in all axes
+        let p = rotation * p - bounds_rotated_min;
         // Row major order, so each row/u64 extends in the x direction. They are indexed in the y direction.
-        .for_each(|p| grid[p.y as usize] |= 0x1 << p.x);
+        grid[p.y as usize] |= 0x1 << p.x
+    }
+
     (bounds_rotated_normalized, grid)
 }
 
