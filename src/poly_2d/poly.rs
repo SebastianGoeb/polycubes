@@ -180,23 +180,32 @@ impl Hash for BinShape {
 
 impl BinShape {
     fn canonical(points: Vec<Vector2<i32>>) -> BinShape {
-        let (points, bounds, grid) = ROTATIONS
-            .iter()
-            // calculate all possible rotations
-            .map(|rotation| {
-                let (points, bounds) = rotate_and_normalize_points(&points, rotation);
-                // bounds.min() should be (0, 0) at this point, and max() should be positive
-                let grid = points_to_grid(&points, &bounds);
-                (points, bounds, grid)
-            })
-            // select rotation that gives the lowest overall binary grid
-            .min_by(|(_, _, grida), (_, _, gridb)| grida.cmp(gridb))
-            .unwrap();
-        BinShape {
-            points,
-            bounds,
-            grid,
+        let mut shape: Option<BinShape> = None;
+        for rotation in ROTATIONS {
+            let (points, bounds) = rotate_and_normalize_points(&points, rotation);
+            // bounds.min() should be (0, 0) at this point, and max() should be positive
+            let grid = points_to_grid(&points, &bounds);
+            match &shape {
+                Some(s) => {
+                    if grid < s.grid {
+                        shape = Some(BinShape {
+                            points,
+                            bounds,
+                            grid,
+                        })
+                    }
+                }
+                None => {
+                    shape = Some(BinShape {
+                        points,
+                        bounds,
+                        grid,
+                    })
+                }
+            }
         }
+
+        shape.unwrap()
     }
 }
 
