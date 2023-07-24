@@ -6,7 +6,6 @@ use std::{
     time::Instant,
 };
 
-use itertools::Itertools;
 use nalgebra::Matrix2;
 use nalgebra::{Rotation2, Vector2};
 
@@ -123,10 +122,10 @@ impl BoundingBox {
     }
 }
 
-impl std::ops::Mul<BoundingBox> for &Rotation2<i32> {
+impl std::ops::Mul<&BoundingBox> for &Rotation2<i32> {
     type Output = BoundingBox;
 
-    fn mul(self, rhs: BoundingBox) -> Self::Output {
+    fn mul(self, rhs: &BoundingBox) -> Self::Output {
         BoundingBox {
             p0: self * rhs.p0,
             p1: self * rhs.p1,
@@ -159,7 +158,7 @@ impl std::ops::Sub<Vector2<i32>> for BoundingBox {
 #[derive(Eq)]
 struct BinShape {
     points: Vec<Vector2<i32>>,
-    bounds: BoundingBox,
+    grid_bounds: BoundingBox,
     grid: Vec<u64>,
 }
 
@@ -180,66 +179,55 @@ impl Hash for BinShape {
 
 impl BinShape {
     fn canonical(points: Vec<Vector2<i32>>) -> BinShape {
-        let mut shape: Option<BinShape> = None;
+        // TODO cache and extend bounds instead of always recomputing
+        let bounds = BoundingBox::from(&points);
+
+        let mut best: Option<(BoundingBox, Vec<u64>)> = None;
         for rotation in ROTATIONS {
-            let (points, bounds) = rotate_and_normalize_points(&points, rotation);
-            // bounds.min() should be (0, 0) at this point, and max() should be positive
-            let grid = points_to_grid(&points, &bounds);
-            match &shape {
-                Some(s) => {
-                    if grid < s.grid {
-                        shape = Some(BinShape {
-                            points,
-                            bounds,
-                            grid,
-                        })
+            let candidate = rotate_shape(&points, &bounds, rotation);
+
+            match &best {
+                Some(b) => {
+                    if candidate.1 < b.1 {
+                        best = Some(candidate)
                     }
                 }
-                None => {
-                    shape = Some(BinShape {
-                        points,
-                        bounds,
-                        grid,
-                    })
-                }
+                None => best = Some(candidate),
             }
         }
 
-        shape.unwrap()
+        let best = best.unwrap();
+        BinShape {
+            points,
+            grid_bounds: best.0,
+            grid: best.1,
+        }
     }
 }
 
-fn rotate_and_normalize_points(
-    points: &[Vector2<i32>],
+fn rotate_shape(
+    points: &Vec<Vector2<i32>>,
+    bounds: &BoundingBox,
     rotation: &Rotation2<i32>,
-) -> (Vec<Vector2<i32>>, BoundingBox) {
-    let bounds = BoundingBox::from(points);
+) -> (BoundingBox, Vec<u64>) {
     let bounds_rotated = rotation * bounds;
     let bounds_rotated_min = bounds_rotated.min();
-
-    let points_rotated_normalized = points
-        .iter()
-        .map(|p| rotation * p)
-        .map(|p| p - bounds_rotated_min) // normalize points to be >= 0 in all axes
-        .collect_vec();
     let bounds_rotated_normalized = bounds_rotated - bounds_rotated_min;
+    let bounds_rotated_normalized_max = bounds_rotated_normalized.max();
 
-    (points_rotated_normalized, bounds_rotated_normalized)
-}
-
-fn points_to_grid(points: &Vec<Vector2<i32>>, bounds: &BoundingBox) -> Vec<u64> {
-    // Row major order, so each row/u64 extends in the x direction. They are indexed in the y direction.
-    let mut grid = vec![0; bounds.max().y as usize + 1];
-    for p in points {
-        grid[p.y as usize] |= 0x1 << p.x
-    }
-    grid
+    let mut grid = vec![0; bounds_rotated_normalized_max.y as usize + 1];
+    points
+        .iter()
+        .map(|p| rotation * p - bounds_rotated_min) // normalize points to be >= 0 in all axes
+        // Row major order, so each row/u64 extends in the x direction. They are indexed in the y direction.
+        .for_each(|p| grid[p.y as usize] |= 0x1 << p.x);
+    (bounds_rotated_normalized, grid)
 }
 
 impl Display for BinShape {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+    fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
         for row in &self.grid {
-            for i_x in 0..self.bounds.max().x + 1 {
+            for i_x in 0..self.grid_bounds.max().x + 1 {
                 let present = (row >> i_x) & 0x1 != 0;
                 write!(f, "{}", if present { 'O' } else { ' ' })?;
             }
