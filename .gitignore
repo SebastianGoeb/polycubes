@@ -22,3 +22,9 @@ Cargo.lock
 # =======
 
 .vscode
+
+# =========
+# Profiling
+# =========
+
+profile.json
