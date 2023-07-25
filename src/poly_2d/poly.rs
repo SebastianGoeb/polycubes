@@ -65,15 +65,12 @@ fn generate_polys_of_size(
     let mut points_tried = 0;
     let mut polys_tried = 0;
     for prev_poly in prev_polys {
-        // let mut possible_points: HashSet<Vector2<i32>> =
-        //     HashSet::with_capacity(prev_poly.points.len() * MOVES.len());
         for p in &prev_poly.points {
             for m in MOVES {
                 points_tried += 1;
                 let new_point = p + m;
                 if prev_poly.points.contains(&new_point) {
                     continue;
-                    // possible_points.insert(new_point);
                 }
 
                 polys_tried += 1;
@@ -86,17 +83,6 @@ fn generate_polys_of_size(
                 new_polys.insert(new_poly);
             }
         }
-
-        // tried += possible_points.len();
-        // for new_point in possible_points {
-        //     // cloning then pushing would force an unnecessary grow, so we initialize with the correct size
-        //     let mut new_points = Vec::with_capacity(prev_poly.points.len() + 1);
-        //     new_points.extend(&prev_poly.points);
-        //     new_points.push(new_point);
-
-        //     let new_poly = BinShape::canonical(new_points);
-        //     new_polys.insert(new_poly);
-        // }
     }
 
     report_performance(start, points_tried, polys_tried, new_polys.len());
