@@ -1,6 +1,8 @@
+use crate::cli::Poly2d;
 use lazy_static::lazy_static;
 use nalgebra::Matrix2;
 use nalgebra::{Rotation2, Vector2};
+use rayon::prelude::*;
 use std::cmp;
 use std::hash::{Hash, Hasher};
 use std::{
@@ -8,8 +10,6 @@ use std::{
     fmt::Display,
     time::Instant,
 };
-
-use crate::cli::Poly2d;
 
 static MOVES: &[Vector2<i32>] = &[
     Vector2::new(0, 1),
@@ -60,32 +60,42 @@ fn generate_polys_of_size(
     }
 
     let prev_polys: &HashSet<BinShape> = &known_polys[&(n - 1)];
-    // each generation seems to be ~4x as large as the previous one, so we allocate some extra space to avoid growing.
-    let mut new_polys: HashSet<BinShape> = HashSet::with_capacity(prev_polys.len() * 5);
-    let mut points_tried = 0;
-    let mut polys_tried = 0;
-    for prev_poly in prev_polys {
-        for p in &prev_poly.points {
-            for m in MOVES {
-                points_tried += 1;
-                let new_point = p + m;
-                if prev_poly.points.contains(&new_point) {
-                    continue;
+    let result: (usize, usize, HashSet<BinShape>) = prev_polys
+        .par_iter()
+        .fold(
+            || (0, 0, HashSet::<BinShape>::new()),
+            |(mut points_tried, mut polys_tried, mut new_polys), prev_poly| {
+                for p in &prev_poly.points {
+                    for m in MOVES {
+                        points_tried += 1;
+                        let new_point = p + m;
+                        if prev_poly.points.contains(&new_point) {
+                            continue;
+                        }
+
+                        polys_tried += 1;
+                        // cloning then pushing would force an unnecessary grow, so we initialize with the correct size
+                        let mut new_points = Vec::with_capacity(prev_poly.points.len() + 1);
+                        new_points.extend(&prev_poly.points);
+                        new_points.push(new_point);
+
+                        let new_poly = BinShape::canonical(new_points);
+                        new_polys.insert(new_poly);
+                    }
                 }
+                (points_tried, polys_tried, new_polys)
+            },
+        )
+        .reduce(
+            || (0, 0, HashSet::<BinShape>::new()),
+            |mut a, b| {
+                a.2.extend(b.2);
+                (a.0 + b.0, a.1 + b.1, a.2)
+            },
+        );
 
-                polys_tried += 1;
-                // cloning then pushing would force an unnecessary grow, so we initialize with the correct size
-                let mut new_points = Vec::with_capacity(prev_poly.points.len() + 1);
-                new_points.extend(&prev_poly.points);
-                new_points.push(new_point);
-
-                let new_poly = BinShape::canonical(new_points);
-                new_polys.insert(new_poly);
-            }
-        }
-    }
-
-    report_performance(start, points_tried, polys_tried, new_polys.len());
+    let new_polys = result.2;
+    report_performance(start, result.0, result.1, new_polys.len());
     new_polys
 }
 
@@ -157,7 +167,7 @@ impl std::ops::Sub<Vector2<i32>> for BoundingBox {
     }
 }
 
-#[derive(Eq)]
+#[derive(Debug, Eq)]
 struct BinShape {
     points: Vec<Vector2<i32>>,
     grid_bounds: BoundingBox,
