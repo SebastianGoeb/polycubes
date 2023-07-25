@@ -9,7 +9,9 @@ debug = true
 
 [dependencies]
 clap = { version = "4.3.12", features = ["derive"] }
+format_num = "0.1.0"
 itertools = "0.11.0"
+lazy_static = "1.4.0"
 nalgebra = "0.32.3"
 ndarray = "0.15.6"
 rand = "0.8.5"

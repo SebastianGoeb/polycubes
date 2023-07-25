@@ -1,3 +1,6 @@
+use lazy_static::lazy_static;
+use nalgebra::Matrix2;
+use nalgebra::{Rotation2, Vector2};
 use std::cmp;
 use std::hash::{Hash, Hasher};
 use std::{
@@ -5,9 +8,6 @@ use std::{
     fmt::Display,
     time::Instant,
 };
-
-use nalgebra::Matrix2;
-use nalgebra::{Rotation2, Vector2};
 
 use crate::cli::Poly2d;
 
@@ -24,6 +24,10 @@ static ROTATIONS: &[Rotation2<i32>] = &[
     Rotation2::from_matrix_unchecked(Matrix2::new(-1, 0, 0, -1)), // 180 deg ccw
     Rotation2::from_matrix_unchecked(Matrix2::new(0, 1, -1, 0)), // 270 deg ccw
 ];
+
+lazy_static! {
+    static ref NUM: format_num::NumberFormat = format_num::NumberFormat::new();
+}
 
 pub fn generate_polys(cli: Poly2d) {
     println!("generating polycubes (in 2d) up to size {}", cli.max_n);
@@ -51,39 +55,51 @@ fn generate_polys_of_size(
     print!("size: {: >2}... ", n);
 
     if n == 1 {
-        report_performance(start, 1, 1);
+        report_performance(start, 1, 1, 1);
         return HashSet::from([BinShape::canonical(vec![Vector2::new(0, 0)])]);
     }
 
     let prev_polys: &HashSet<BinShape> = &known_polys[&(n - 1)];
     // each generation seems to be ~4x as large as the previous one, so we allocate some extra space to avoid growing.
     let mut new_polys: HashSet<BinShape> = HashSet::with_capacity(prev_polys.len() * 5);
-    let mut tried = 0;
+    let mut points_tried = 0;
+    let mut polys_tried = 0;
     for prev_poly in prev_polys {
-        let mut possible_points: HashSet<Vector2<i32>> =
-            HashSet::with_capacity(prev_poly.points.len() * MOVES.len());
+        // let mut possible_points: HashSet<Vector2<i32>> =
+        //     HashSet::with_capacity(prev_poly.points.len() * MOVES.len());
         for p in &prev_poly.points {
             for m in MOVES {
+                points_tried += 1;
                 let new_point = p + m;
-                if !prev_poly.points.contains(&new_point) {
-                    possible_points.insert(new_point);
+                if prev_poly.points.contains(&new_point) {
+                    continue;
+                    // possible_points.insert(new_point);
                 }
+
+                polys_tried += 1;
+                // cloning then pushing would force an unnecessary grow, so we initialize with the correct size
+                let mut new_points = Vec::with_capacity(prev_poly.points.len() + 1);
+                new_points.extend(&prev_poly.points);
+                new_points.push(new_point);
+
+                let new_poly = BinShape::canonical(new_points);
+                new_polys.insert(new_poly);
             }
         }
 
-        tried += possible_points.len();
-        for new_point in possible_points {
-            // cloning then pushing would force an unnecessary grow, so we initialize with the correct size
-            let mut new_points = Vec::with_capacity(prev_poly.points.len() + 1);
-            new_points.extend(&prev_poly.points);
-            new_points.push(new_point);
+        // tried += possible_points.len();
+        // for new_point in possible_points {
+        //     // cloning then pushing would force an unnecessary grow, so we initialize with the correct size
+        //     let mut new_points = Vec::with_capacity(prev_poly.points.len() + 1);
+        //     new_points.extend(&prev_poly.points);
+        //     new_points.push(new_point);
 
-            let new_poly = BinShape::canonical(new_points);
-            new_polys.insert(new_poly);
-        }
+        //     let new_poly = BinShape::canonical(new_points);
+        //     new_polys.insert(new_poly);
+        // }
     }
 
-    report_performance(start, tried, new_polys.len());
+    report_performance(start, points_tried, polys_tried, new_polys.len());
     new_polys
 }
 
@@ -240,25 +256,41 @@ impl Display for BinShape {
     }
 }
 
-fn report_performance(start: Instant, tried: usize, found: usize) {
+fn report_performance(start: Instant, points_tried: usize, polys_tried: usize, found: usize) {
     let dur = start.elapsed();
 
-    let tried_string = format!(
-        "tried: {} ({:.0}/s)",
-        tried,
-        tried as f64 * 1000.0 / dur.as_millis() as f64
+    let points_tried_string = format!(
+        "points tried: {: >10} {: >12}",
+        points_tried,
+        format!(
+            "({}/s)",
+            NUM.format(".3s", points_tried as f64 / dur.as_secs_f64())
+        )
+    );
+
+    let polys_tried_string = format!(
+        "polys tried: {: >10} {: >12}",
+        polys_tried,
+        format!(
+            "({}/s)",
+            NUM.format(".3s", polys_tried as f64 / dur.as_secs_f64())
+        )
     );
 
     let found_string = format!(
-        "found: {} ({:.0}/s)",
+        "found: {: >10} {: >12}",
         found,
-        found as f64 * 1000.0 / dur.as_millis() as f64
+        format!(
+            "({}/s)",
+            NUM.format(".3s", found as f64 / dur.as_secs_f64())
+        )
     );
 
     println!(
-        "time: {}s {: <25} {: <25}",
+        "time: {}s {: <40} {: <40} {: <40}",
         dur.as_secs(),
-        tried_string,
+        points_tried_string,
+        polys_tried_string,
         found_string
     );
 }
