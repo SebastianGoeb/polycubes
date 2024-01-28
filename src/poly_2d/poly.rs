@@ -1,28 +1,20 @@
-use crate::cli::Poly2d;
-use lazy_static::lazy_static;
-use nalgebra::Matrix2;
-use nalgebra::{Rotation2, Vector2};
-use rayon::prelude::*;
-use std::cmp;
-use std::hash::{Hash, Hasher};
 use std::{
     collections::{HashMap, HashSet},
-    fmt::Display,
     time::Instant,
 };
+
+use lazy_static::lazy_static;
+use nalgebra::Vector2;
+use rayon::prelude::*;
+
+use crate::cli::Poly2d;
+use crate::poly_2d::shape::shape_with_grid::ShapeWithGrid;
 
 static MOVES: &[Vector2<i32>] = &[
     Vector2::new(0, 1),
     Vector2::new(0, -1),
     Vector2::new(1, 0),
     Vector2::new(-1, 0),
-];
-
-static ROTATIONS: &[Rotation2<i32>] = &[
-    Rotation2::from_matrix_unchecked(Matrix2::new(1, 0, 0, 1)), // 0 deg ccw
-    Rotation2::from_matrix_unchecked(Matrix2::new(0, -1, 1, 0)), // 90 deg ccw
-    Rotation2::from_matrix_unchecked(Matrix2::new(-1, 0, 0, -1)), // 180 deg ccw
-    Rotation2::from_matrix_unchecked(Matrix2::new(0, 1, -1, 0)), // 270 deg ccw
 ];
 
 lazy_static! {
@@ -38,8 +30,8 @@ pub fn generate_polys(cli: Poly2d) {
     }
 }
 
-fn generate_polys_up_to_size(max_n: usize) -> HashMap<usize, HashSet<BinShape>> {
-    let mut known_polys: HashMap<usize, HashSet<BinShape>> = HashMap::new();
+fn generate_polys_up_to_size(max_n: usize) -> HashMap<usize, HashSet<ShapeWithGrid>> {
+    let mut known_polys: HashMap<usize, HashSet<ShapeWithGrid>> = HashMap::new();
     for n in 1..=max_n {
         let polys = generate_polys_of_size(n, &known_polys);
         known_polys.entry(n).or_insert(polys);
@@ -49,21 +41,21 @@ fn generate_polys_up_to_size(max_n: usize) -> HashMap<usize, HashSet<BinShape>> 
 
 fn generate_polys_of_size(
     n: usize,
-    known_polys: &HashMap<usize, HashSet<BinShape>>,
-) -> HashSet<BinShape> {
+    known_polys: &HashMap<usize, HashSet<ShapeWithGrid>>,
+) -> HashSet<ShapeWithGrid> {
     let start = Instant::now();
     print!("size: {: >2}... ", n);
 
     if n == 1 {
         report_performance(start, 1, 1, 1);
-        return HashSet::from([BinShape::canonical(vec![Vector2::new(0, 0)])]);
+        return HashSet::from([ShapeWithGrid::canonical(vec![Vector2::new(0, 0)])]);
     }
 
-    let prev_polys: &HashSet<BinShape> = &known_polys[&(n - 1)];
-    let result: (usize, usize, HashSet<BinShape>) = prev_polys
+    let prev_polys: &HashSet<ShapeWithGrid> = &known_polys[&(n - 1)];
+    let result: (usize, usize, HashSet<ShapeWithGrid>) = prev_polys
         .par_iter()
         .fold(
-            || (0, 0, HashSet::<BinShape>::new()),
+            || (0, 0, HashSet::<ShapeWithGrid>::new()),
             |(mut points_tried, mut polys_tried, mut new_polys), prev_poly| {
                 for p in &prev_poly.points {
                     for m in MOVES {
@@ -79,7 +71,7 @@ fn generate_polys_of_size(
                         new_points.extend(&prev_poly.points);
                         new_points.push(new_point);
 
-                        let new_poly = BinShape::canonical(new_points);
+                        let new_poly = ShapeWithGrid::canonical(new_points);
                         new_polys.insert(new_poly);
                     }
                 }
@@ -87,7 +79,7 @@ fn generate_polys_of_size(
             },
         )
         .reduce(
-            || (0, 0, HashSet::<BinShape>::new()),
+            || (0, 0, HashSet::<ShapeWithGrid>::new()),
             |mut a, b| {
                 a.2.extend(b.2);
                 (a.0 + b.0, a.1 + b.1, a.2)
@@ -97,159 +89,6 @@ fn generate_polys_of_size(
     let new_polys = result.2;
     report_performance(start, result.0, result.1, new_polys.len());
     new_polys
-}
-
-#[derive(PartialEq, Eq, Debug)]
-struct BoundingBox {
-    p0: Vector2<i32>,
-    p1: Vector2<i32>,
-}
-
-impl BoundingBox {
-    fn from(points: &[Vector2<i32>]) -> BoundingBox {
-        return BoundingBox {
-            p0: Vector2::new(
-                points.iter().map(|p| p.x).min().unwrap(),
-                points.iter().map(|p| p.y).min().unwrap(),
-            ),
-            p1: Vector2::new(
-                points.iter().map(|p| p.x).max().unwrap(),
-                points.iter().map(|p| p.y).max().unwrap(),
-            ),
-        };
-    }
-
-    fn min(&self) -> Vector2<i32> {
-        Vector2::new(
-            cmp::min(self.p0.x, self.p1.x),
-            cmp::min(self.p0.y, self.p1.y),
-        )
-    }
-
-    fn max(&self) -> Vector2<i32> {
-        Vector2::new(
-            cmp::max(self.p0.x, self.p1.x),
-            cmp::max(self.p0.y, self.p1.y),
-        )
-    }
-}
-
-impl std::ops::Mul<&BoundingBox> for &Rotation2<i32> {
-    type Output = BoundingBox;
-
-    fn mul(self, rhs: &BoundingBox) -> Self::Output {
-        BoundingBox {
-            p0: self * rhs.p0,
-            p1: self * rhs.p1,
-        }
-    }
-}
-
-impl std::ops::Add<Vector2<i32>> for BoundingBox {
-    type Output = BoundingBox;
-
-    fn add(self, rhs: Vector2<i32>) -> BoundingBox {
-        BoundingBox {
-            p0: self.p0 + rhs,
-            p1: self.p1 + rhs,
-        }
-    }
-}
-
-impl std::ops::Sub<Vector2<i32>> for BoundingBox {
-    type Output = BoundingBox;
-
-    fn sub(self, rhs: Vector2<i32>) -> BoundingBox {
-        BoundingBox {
-            p0: self.p0 - rhs,
-            p1: self.p1 - rhs,
-        }
-    }
-}
-
-#[derive(Debug, Eq)]
-struct BinShape {
-    points: Vec<Vector2<i32>>,
-    grid_bounds: BoundingBox,
-    grid: Vec<u64>,
-}
-
-impl PartialEq for BinShape {
-    fn eq(&self, other: &Self) -> bool {
-        self.grid == other.grid
-    }
-}
-
-impl Hash for BinShape {
-    fn hash<H>(&self, state: &mut H)
-    where
-        H: Hasher,
-    {
-        self.grid.hash(state);
-    }
-}
-
-impl BinShape {
-    fn canonical(points: Vec<Vector2<i32>>) -> BinShape {
-        // TODO cache and extend bounds instead of always recomputing
-        let bounds = BoundingBox::from(&points);
-
-        let mut best: Option<(BoundingBox, Vec<u64>)> = None;
-        for rotation in ROTATIONS {
-            let candidate = rotate_shape(&points, &bounds, rotation);
-
-            match &best {
-                Some(b) => {
-                    if candidate.1 < b.1 {
-                        best = Some(candidate)
-                    }
-                }
-                None => best = Some(candidate),
-            }
-        }
-
-        let best = best.unwrap();
-        BinShape {
-            points,
-            grid_bounds: best.0,
-            grid: best.1,
-        }
-    }
-}
-
-fn rotate_shape(
-    points: &Vec<Vector2<i32>>,
-    bounds: &BoundingBox,
-    rotation: &Rotation2<i32>,
-) -> (BoundingBox, Vec<u64>) {
-    let bounds_rotated = rotation * bounds;
-    let bounds_rotated_min = bounds_rotated.min();
-    let bounds_rotated_normalized = bounds_rotated - bounds_rotated_min;
-    let bounds_rotated_normalized_max = bounds_rotated_normalized.max();
-
-    let mut grid = vec![0; bounds_rotated_normalized_max.y as usize + 1];
-    for p in points {
-        // normalize points to be >= 0 in all axes
-        let p = rotation * p - bounds_rotated_min;
-        // Row major order, so each row/u64 extends in the x direction. They are indexed in the y direction.
-        grid[p.y as usize] |= 0x1 << p.x
-    }
-
-    (bounds_rotated_normalized, grid)
-}
-
-impl Display for BinShape {
-    fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
-        for row in &self.grid {
-            for i_x in 0..self.grid_bounds.max().x + 1 {
-                let present = (row >> i_x) & 0x1 != 0;
-                write!(f, "{}", if present { 'O' } else { ' ' })?;
-            }
-            writeln!(f)?;
-        }
-
-        Ok(())
-    }
 }
 
 fn report_performance(start: Instant, points_tried: usize, polys_tried: usize, found: usize) {
@@ -291,7 +130,7 @@ fn report_performance(start: Instant, points_tried: usize, polys_tried: usize, f
     );
 }
 
-fn report_polys(cli: Poly2d, known_polys: HashMap<usize, HashSet<BinShape>>) {
+fn report_polys(cli: Poly2d, known_polys: HashMap<usize, HashSet<ShapeWithGrid>>) {
     for n in 1..=cli.max_n {
         println!("Polys with size n={}", n);
         for poly in &known_polys[&n] {
