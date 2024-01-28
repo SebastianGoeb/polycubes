@@ -48,7 +48,7 @@ jobs:
 
       # test
       - name: Run tests and generate coverage
-        run: cargo nextest --profile ci
+        run: cargo nextest run --profile ci
 
       - uses: mikepenz/action-junit-report@v4
         if: always()
