@@ -1,0 +1,71 @@
+name: PR
+
+on:
+  pull_request:
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      checks: write
+    steps:
+      - name: Checkout Repo
+        uses: actions/checkout@v4
+
+      - name: Install Rust
+        uses: actions-rs/toolchain@v1
+        with:
+          toolchain: stable
+          override: true
+          components: rustfmt, clippy, llvm-tools-preview
+
+      # needed dirs: https://doc.rust-lang.org/cargo/guide/cargo-home.html#caching-the-cargo-home-in-ci
+      - name: Cache Cargo System (cargo install)
+        uses: actions/cache@v3
+        with:
+          path: |
+            ~/.cargo/.crates.toml
+            ~/.cargo/.crates2.json
+            ~/.cargo/bin/
+          key: cargo-system-${{ runner.os }}-${{ hashFiles('~/.cargo/.crates.toml', '~/.cargo/.crates2.json') }}
+
+      # example: https://github.com/actions/cache/blob/main/examples.md#rust---cargo
+      - name: Cache Cargo Repo (cargo install)
+        uses: actions/cache@v3
+        with:
+          path: |
+            ~/.cargo/registry/index/
+            ~/.cargo/registry/cache/
+            ~/.cargo/git/db/
+            target/
+          key: cargo-repo-${{ runner.os }}-${{ hashFiles('**/Cargo.lock') }}
+
+      - name: Install more cargo tools
+        uses: taiki-e/install-action@v2
+        with:
+          tool: cargo-llvm-cov,cargo-nextest
+
+      # test
+      - name: Run tests and generate coverage
+        run: cargo llvm-cov --all-features --workspace --lcov --output-path lcov.info nextest --profile ci
+
+      - uses: mikepenz/action-junit-report@v4
+        if: always()
+        with:
+          check_name: test
+          report_paths: "**/junit.xml"
+
+      # lint
+      - uses: actions-rs/clippy-check@v1
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+          args: --all-features -- -D warnings
+          name: lint
+        if: always()
+
+      # coverage
+      - name: Upload coverage to Coveralls
+        uses: coverallsapp/github-action@v2.2.3
+        if: always()
+
