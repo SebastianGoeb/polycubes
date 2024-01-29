@@ -1,4 +1,4 @@
-use std::cmp::min;
+use std::cmp::{min, Ordering};
 use std::hash::{Hash, Hasher};
 
 use itertools::Itertools;
@@ -51,7 +51,7 @@ impl ShapeMinimal {
 
                 return (rotation, realign_offset, realigned_bounds, grid);
             })
-            .min_by_key(|(_, _, _, grid)| grid.clone())
+            .min_by(|(_, _, _, grid1), (_, _, _, grid2)| grid1.cmp(grid2))
             .unwrap();
 
         let points = self.points.iter()
