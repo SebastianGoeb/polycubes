@@ -1,18 +1,36 @@
 use std::cmp::min;
+use std::hash::{Hash, Hasher};
 
 use itertools::Itertools;
 use nalgebra::{Rotation2, Vector2};
 
-#[derive(Debug, PartialEq)]
+#[derive(Debug, PartialEq, Eq)]
 pub struct ShapeMinimal {
     pub points: Vec<Vector2<i8>>,
     bounds: Vector2<i8>,
 }
 
 impl ShapeMinimal {
+    pub fn new(points: Vec<Vector2<i8>>) -> Self {
+        let min: Vector2<i8> = Vector2::new(
+            points.iter().map(|p| p.x).min().unwrap(),
+            points.iter().map(|p| p.y).min().unwrap(),
+        );
+        let points = if min != Vector2::new(0, 0) {
+            points.iter().map(|p| p - min).collect_vec()
+        } else {
+            points
+        };
+        let bounds = Vector2::new(
+            points.iter().map(|p| p.x).max().unwrap(),
+            points.iter().map(|p| p.y).max().unwrap(),
+        );
+        ShapeMinimal { points, bounds }
+    }
+
     // assumes points are already aligned with the origin
     // (no points are negative, and some points touch both axes)
-    fn canonical_clone_with_grid(&self, rotations: &[Rotation2<i8>]) -> ShapeMinimal {
+    pub fn canonical_clone_with_grid(&self, rotations: &[Rotation2<i8>]) -> ShapeMinimal {
         let (rotation, realign_offset, bounds, _) = rotations.iter()
             .map(|rotation| {
                 // calculate how to offset the shape post-rotation
@@ -44,6 +62,13 @@ impl ShapeMinimal {
     }
 }
 
+impl Hash for ShapeMinimal {
+    fn hash<H>(&self, state: &mut H) where H: Hasher,
+    {
+        self.points.hash(state);
+    }
+}
+
 #[cfg(test)]
 mod test {
     use nalgebra::Vector2;
@@ -52,9 +77,9 @@ mod test {
     use crate::poly_2d::shape::shape_minimal::ShapeMinimal;
 
     /*
-          xxx
-         xx
-         */
+                                                                                      xxx
+                                                                                     xx
+                                                                                     */
     fn rot0() -> ShapeMinimal {
         ShapeMinimal {
             points: vec![
@@ -136,26 +161,5 @@ mod test {
                 rot270()
             );
         }
-    }
-}
-
-#[derive(Debug)]
-struct Bounds {
-    p0: Vector2<i8>,
-    p1: Vector2<i8>,
-}
-
-impl Bounds {
-    pub fn from(points: &[Vector2<i8>]) -> Bounds {
-        return Bounds {
-            p0: Vector2::new(
-                points.iter().map(|p| p.x).min().unwrap(),
-                points.iter().map(|p| p.y).min().unwrap(),
-            ),
-            p1: Vector2::new(
-                points.iter().map(|p| p.x).max().unwrap(),
-                points.iter().map(|p| p.y).max().unwrap(),
-            ),
-        };
     }
 }

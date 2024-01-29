@@ -22,6 +22,9 @@ pub struct Poly2d {
 
     #[arg(short, long)]
     pub report_polys: bool,
+
+    #[arg(short, long)]
+    pub algorithm: Option<String>,
 }
 
 pub fn parse_cli() -> Cli {
