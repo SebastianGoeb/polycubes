@@ -8,23 +8,10 @@ use nalgebra::Vector2;
 use rayon::prelude::*;
 
 use crate::cli::{Algorithm, Poly2d};
+use crate::poly_2d::moves::{MOVES32, MOVES8};
 use crate::poly_2d::rotation::ROTATIONS8;
 use crate::poly_2d::shape::shape_minimal::ShapeMinimal;
 use crate::poly_2d::shape::shape_with_grid::ShapeWithGrid;
-
-static MOVES: &[Vector2<i32>] = &[
-    Vector2::new(0, 1),
-    Vector2::new(0, -1),
-    Vector2::new(1, 0),
-    Vector2::new(-1, 0),
-];
-
-static MOVES8: &[Vector2<i8>] = &[
-    Vector2::new(0, 1),
-    Vector2::new(0, -1),
-    Vector2::new(1, 0),
-    Vector2::new(-1, 0),
-];
 
 lazy_static! {
     static ref NUM: format_num::NumberFormat = format_num::NumberFormat::new();
@@ -76,7 +63,7 @@ fn generate_shape_with_grid_level(
             || (0, 0, HashSet::<ShapeWithGrid>::new()),
             |(mut points_tried, mut polys_tried, mut new_polys), prev_poly| {
                 for p in &prev_poly.points {
-                    for m in MOVES {
+                    for m in MOVES32 {
                         points_tried += 1;
                         let new_point = p + m;
                         if prev_poly.points.contains(&new_point) {
