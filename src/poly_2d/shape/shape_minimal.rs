@@ -49,7 +49,7 @@ impl ShapeMinimal {
                     grid[point_rotated.y as usize] |= 0x1 << point_rotated.x
                 }
 
-                return (rotation, realign_offset, realigned_bounds, grid);
+                (rotation, realign_offset, realigned_bounds, grid)
             })
             .min_by(|(_, _, _, grid1), (_, _, _, grid2)| grid1.cmp(grid2))
             .unwrap();
@@ -58,7 +58,7 @@ impl ShapeMinimal {
             .map(|p| rotation * p + realign_offset)
             .collect_vec();
 
-        return ShapeMinimal { points, bounds };
+        ShapeMinimal { points, bounds }
     }
 }
 
