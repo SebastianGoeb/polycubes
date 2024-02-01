@@ -2,14 +2,12 @@ use std::{
     collections::{HashMap, HashSet},
     time::Instant,
 };
-use std::fmt::Display;
-use std::str::FromStr;
 
 use lazy_static::lazy_static;
 use nalgebra::Vector2;
 use rayon::prelude::*;
 
-use crate::cli::Poly2d;
+use crate::cli::{Algorithm, Poly2d};
 use crate::poly_2d::rotation::ROTATIONS8;
 use crate::poly_2d::shape::shape_minimal::ShapeMinimal;
 use crate::poly_2d::shape::shape_with_grid::ShapeWithGrid;
@@ -32,35 +30,8 @@ lazy_static! {
     static ref NUM: format_num::NumberFormat = format_num::NumberFormat::new();
 }
 
-enum Algorithm {
-    A32,
-    B8,
-}
-
-impl FromStr for Algorithm {
-    type Err = ();
-    fn from_str(s: &str) -> Result<Self, Self::Err> {
-        match s.to_lowercase().as_str() {
-            "a32" => Ok(Algorithm::A32),
-            "b8" => Ok(Algorithm::B8),
-            _ => Err(())
-        }
-    }
-}
-
-impl Display for Algorithm {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "{}", match self {
-            Algorithm::A32 => "A32",
-            Algorithm::B8 => "B8"
-        })
-    }
-}
-
 pub fn generate_polys(cli: Poly2d) {
-    let alg: Algorithm = cli.algorithm.as_ref()
-        .map(|a| Algorithm::from_str(a.as_str()).unwrap())
-        .unwrap_or(Algorithm::A32);
+    let alg = cli.algorithm.clone().unwrap_or(Algorithm::A32);
 
     println!("generating polycubes (in 2d) up to size {} with algorithm {}", cli.max_n, alg);
 
