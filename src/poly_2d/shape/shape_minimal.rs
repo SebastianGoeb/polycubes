@@ -1,4 +1,4 @@
-use std::cmp::{min, Ordering};
+use std::cmp::min;
 use std::hash::{Hash, Hasher};
 
 use itertools::Itertools;
@@ -76,10 +76,8 @@ mod test {
     use crate::poly_2d::rotation::ROTATIONS8;
     use crate::poly_2d::shape::shape_minimal::ShapeMinimal;
 
-    /*
-                                                                                      xxx
-                                                                                     xx
-                                                                                     */
+    //  xxx
+    // xx
     fn rot0() -> ShapeMinimal {
         ShapeMinimal {
             points: vec![
@@ -93,12 +91,10 @@ mod test {
         }
     }
 
-    /*
-     x
-     x
-     xx
-      x
-     */
+    // x
+    // x
+    // xx
+    //  x
     fn rot90() -> ShapeMinimal {
         ShapeMinimal {
             points: vec![
@@ -112,10 +108,8 @@ mod test {
         }
     }
 
-    /*
-       xx
-     xxx
-     */
+    //   xx
+    // xxx
     fn rot180() -> ShapeMinimal {
         ShapeMinimal {
             points: vec![
@@ -129,12 +123,10 @@ mod test {
         }
     }
 
-    /*
-     x
-     xx
-      x
-      x
-     */
+    // x
+    // xx
+    //  x
+    //  x
     fn rot270() -> ShapeMinimal {
         ShapeMinimal {
             points: vec![
