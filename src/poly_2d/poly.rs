@@ -7,39 +7,44 @@ use lazy_static::lazy_static;
 use nalgebra::Vector2;
 use rayon::prelude::*;
 
-use crate::cli::Poly2d;
+use crate::cli::{Algorithm, Poly2d};
+use crate::poly_2d::moves::{MOVES32, MOVES8};
+use crate::poly_2d::rotation::ROTATIONS8;
+use crate::poly_2d::shape::shape_minimal::ShapeMinimal;
 use crate::poly_2d::shape::shape_with_grid::ShapeWithGrid;
-
-static MOVES: &[Vector2<i32>] = &[
-    Vector2::new(0, 1),
-    Vector2::new(0, -1),
-    Vector2::new(1, 0),
-    Vector2::new(-1, 0),
-];
 
 lazy_static! {
     static ref NUM: format_num::NumberFormat = format_num::NumberFormat::new();
 }
 
 pub fn generate_polys(cli: Poly2d) {
-    println!("generating polycubes (in 2d) up to size {}", cli.max_n);
-    let polys = generate_polys_up_to_size(cli.max_n);
+    let alg = cli.algorithm.clone().unwrap_or(Algorithm::A32);
 
-    if cli.report_polys {
-        report_polys(cli, polys);
+    println!("generating polycubes (in 2d) up to size {} with algorithm {}", cli.max_n, alg);
+
+    match alg {
+        Algorithm::A32 => {
+            let polys = generate_shape_with_grid_up_to(cli.max_n);
+            if cli.report_polys {
+                report_polys(cli, polys);
+            }
+        }
+        Algorithm::B8 => {
+            generate_shape_minimal_up_to(cli.max_n);
+        }
     }
 }
 
-fn generate_polys_up_to_size(max_n: usize) -> HashMap<usize, HashSet<ShapeWithGrid>> {
+fn generate_shape_with_grid_up_to(max_n: usize) -> HashMap<usize, HashSet<ShapeWithGrid>> {
     let mut known_polys: HashMap<usize, HashSet<ShapeWithGrid>> = HashMap::new();
     for n in 1..=max_n {
-        let polys = generate_polys_of_size(n, &known_polys);
+        let polys = generate_shape_with_grid_level(n, &known_polys);
         known_polys.entry(n).or_insert(polys);
     }
     known_polys
 }
 
-fn generate_polys_of_size(
+fn generate_shape_with_grid_level(
     n: usize,
     known_polys: &HashMap<usize, HashSet<ShapeWithGrid>>,
 ) -> HashSet<ShapeWithGrid> {
@@ -58,7 +63,7 @@ fn generate_polys_of_size(
             || (0, 0, HashSet::<ShapeWithGrid>::new()),
             |(mut points_tried, mut polys_tried, mut new_polys), prev_poly| {
                 for p in &prev_poly.points {
-                    for m in MOVES {
+                    for m in MOVES32 {
                         points_tried += 1;
                         let new_point = p + m;
                         if prev_poly.points.contains(&new_point) {
@@ -80,6 +85,67 @@ fn generate_polys_of_size(
         )
         .reduce(
             || (0, 0, HashSet::<ShapeWithGrid>::new()),
+            |mut a, b| {
+                a.2.extend(b.2);
+                (a.0 + b.0, a.1 + b.1, a.2)
+            },
+        );
+
+    let new_polys = result.2;
+    report_performance(start, result.0, result.1, new_polys.len());
+    new_polys
+}
+
+fn generate_shape_minimal_up_to(max_n: usize) -> HashMap<usize, HashSet<ShapeMinimal>> {
+    let mut known_polys: HashMap<usize, HashSet<ShapeMinimal>> = HashMap::new();
+    for n in 1..=max_n {
+        let polys = generate_shape_minimal_level(n, &known_polys);
+        known_polys.entry(n).or_insert(polys);
+    }
+    known_polys
+}
+
+fn generate_shape_minimal_level(
+    n: usize,
+    known_polys: &HashMap<usize, HashSet<ShapeMinimal>>,
+) -> HashSet<ShapeMinimal> {
+    let start = Instant::now();
+    print!("size: {: >2}... ", n);
+
+    if n == 1 {
+        report_performance(start, 1, 1, 1);
+        return HashSet::from([ShapeMinimal::new(vec![Vector2::new(0, 0)])]);
+    }
+
+    let prev_polys: &HashSet<ShapeMinimal> = &known_polys[&(n - 1)];
+    let result: (usize, usize, HashSet<ShapeMinimal>) = prev_polys
+        .par_iter()
+        .fold(
+            || (0, 0, HashSet::<ShapeMinimal>::new()),
+            |(mut points_tried, mut polys_tried, mut new_polys), prev_poly| {
+                for p in &prev_poly.points {
+                    for m in MOVES8 {
+                        points_tried += 1;
+                        let new_point = p + m;
+                        if prev_poly.points.contains(&new_point) {
+                            continue;
+                        }
+
+                        polys_tried += 1;
+                        // cloning then pushing would force an unnecessary grow, so we initialize with the correct size
+                        let mut new_points = Vec::with_capacity(prev_poly.points.len() + 1);
+                        new_points.extend(&prev_poly.points);
+                        new_points.push(new_point);
+
+                        let new_poly = ShapeMinimal::new(new_points).canonical_clone_with_grid(ROTATIONS8);
+                        new_polys.insert(new_poly);
+                    }
+                }
+                (points_tried, polys_tried, new_polys)
+            },
+        )
+        .reduce(
+            || (0, 0, HashSet::<ShapeMinimal>::new()),
             |mut a, b| {
                 a.2.extend(b.2);
                 (a.0 + b.0, a.1 + b.1, a.2)

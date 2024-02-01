@@ -3,7 +3,7 @@ use std::hash::{Hash, Hasher};
 
 use nalgebra::{Rotation2, Vector2};
 
-use crate::poly_2d::rotation::ROTATIONS;
+use crate::poly_2d::rotation::ROTATIONS32;
 use crate::poly_2d::shape::bounding_box_two_points::BoundingBoxTwoPoints;
 
 #[derive(Debug, Eq)]
@@ -19,7 +19,7 @@ impl ShapeWithGrid {
         let bounds = BoundingBoxTwoPoints::from(&points);
 
         let mut best: Option<(BoundingBoxTwoPoints, Vec<u64>)> = None;
-        for rotation in ROTATIONS {
+        for rotation in ROTATIONS32 {
             let candidate = rotate_shape(&points, &bounds, rotation);
 
             match &best {
