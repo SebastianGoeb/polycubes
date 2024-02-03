@@ -3,13 +3,13 @@ use std::{
     time::Instant,
 };
 
+use itertools::Itertools;
 use lazy_static::lazy_static;
 use nalgebra::Vector2;
 use rayon::prelude::*;
 
 use crate::cli::{Algorithm, Poly2d};
 use crate::poly_2d::moves::{MOVES32, MOVES8};
-use crate::poly_2d::rotation::ROTATIONS8;
 use crate::poly_2d::shape::shape_minimal::ShapeMinimal;
 use crate::poly_2d::shape::shape_with_grid::ShapeWithGrid;
 
@@ -30,7 +30,16 @@ pub fn generate_polys(cli: Poly2d) {
             }
         }
         Algorithm::B8 => {
-            generate_shape_minimal_up_to(cli.max_n);
+            let polys = generate_shape_minimal_up_to(cli.max_n);
+            if cli.report_polys {
+                for (size, polys_level) in polys.iter()
+                    .sorted_by(|a, b| a.0.cmp(b.0)) {
+                    println!("\nsize: {}", size);
+                    for p in polys_level {
+                        println!("{:?}", p);
+                    }
+                }
+            }
         }
     }
 }
@@ -137,7 +146,7 @@ fn generate_shape_minimal_level(
                         new_points.extend(&prev_poly.points);
                         new_points.push(new_point);
 
-                        let new_poly = ShapeMinimal::new(new_points).canonical_clone_with_grid(ROTATIONS8);
+                        let new_poly = ShapeMinimal::new(new_points);
                         new_polys.insert(new_poly);
                     }
                 }

@@ -1,41 +1,54 @@
 use std::cmp::min;
 use std::hash::{Hash, Hasher};
 
-use itertools::Itertools;
 use nalgebra::{Rotation2, Vector2};
+
+use crate::poly_2d::rotation::ROTATIONS8;
 
 #[derive(Debug, PartialEq, Eq)]
 pub struct ShapeMinimal {
     pub points: Vec<Vector2<i8>>,
-    bounds: Vector2<i8>,
+    // rot: &'static Rotation2<i8>,
+    // min: Vector2<i8>,
+    // max: Vector2<i8>,
 }
 
 impl ShapeMinimal {
-    pub fn new(points: Vec<Vector2<i8>>) -> Self {
+    pub fn new(mut points: Vec<Vector2<i8>>) -> Self {
         let min: Vector2<i8> = Vector2::new(
             points.iter().map(|p| p.x).min().unwrap(),
             points.iter().map(|p| p.y).min().unwrap(),
         );
-        let points = if min != Vector2::new(0, 0) {
-            points.iter().map(|p| p - min).collect_vec()
-        } else {
-            points
-        };
-        let bounds = Vector2::new(
+        let max: Vector2<i8> = Vector2::new(
             points.iter().map(|p| p.x).max().unwrap(),
             points.iter().map(|p| p.y).max().unwrap(),
         );
-        ShapeMinimal { points, bounds }
+        let (rot, realign_offset) = ShapeMinimal::canonical_rotation(&points, &min, &max);
+        for p in &mut points {
+            *p = rot * (*p - min) + realign_offset;
+        }
+        points.sort_by(|a, b| a.x.cmp(&b.x).then(a.y.cmp(&b.y)));
+        let max: Vector2<i8> = Vector2::new(
+            points.iter().map(|p| p.x).max().unwrap(),
+            points.iter().map(|p| p.y).max().unwrap(),
+        );
+        let res = ShapeMinimal {
+            points,
+            // rot, min: Vector2::new(0, 0), max
+        };
+        // println!("canonical result: {:?}", res);
+        res
     }
 
-    // assumes points are already aligned with the origin
-    // (no points are negative, and some points touch both axes)
-    pub fn canonical_clone_with_grid(&self, rotations: &[Rotation2<i8>]) -> ShapeMinimal {
-        let (rotation, realign_offset, bounds, _) = rotations.iter()
+    fn canonical_rotation(points: &[Vector2<i8>], minp: &Vector2<i8>, maxp: &Vector2<i8>) -> (&'static Rotation2<i8>, Vector2<i8>) {
+        // println!("\ncanonicalizing {:?}", points);
+        let (_, rotation, realign_offset) = ROTATIONS8.iter()
             .map(|rotation| {
+                let bounds = maxp - minp;
+
                 // calculate how to offset the shape post-rotation
                 // such that it's aligned with the origin again
-                let rotated_bounds: Vector2<i8> = rotation * self.bounds;
+                let rotated_bounds: Vector2<i8> = rotation * bounds;
                 let realign_offset: Vector2<i8> = Vector2::new(
                     -min(rotated_bounds.x, 0),
                     -min(rotated_bounds.y, 0),
@@ -43,115 +56,230 @@ impl ShapeMinimal {
                 let realigned_bounds = rotated_bounds.abs();
 
                 // create 1-hot grid by setting each bit to 1 where there is a point
-                let mut grid = vec![0; realigned_bounds.y as usize + 1];
-                for point in &self.points {
-                    let point_rotated = rotation * point + realign_offset;
+                let mut grid: Vec<u64> = vec![0; realigned_bounds.y as usize + 1];
+                for point in points {
+                    let point_rotated = (rotation * (point - minp)) + realign_offset;
                     grid[point_rotated.y as usize] |= 0x1 << point_rotated.x
                 }
 
-                (rotation, realign_offset, realigned_bounds, grid)
+                // println!("rotation: {:?}", &rotation);
+                for v in &grid {
+                    // println!("{:4b}", v);
+                }
+
+                (grid, rotation, realign_offset)
             })
-            .min_by(|(_, _, _, grid1), (_, _, _, grid2)| grid1.cmp(grid2))
+            .min_by(|a, b| a.0.cmp(&b.0))
             .unwrap();
 
-        let points = self.points.iter()
-            .map(|p| rotation * p + realign_offset)
-            .collect_vec();
+        // println!("canonical rotation: {:?}", &rotation);
 
-        ShapeMinimal { points, bounds }
+        (rotation, realign_offset)
     }
+
+    // assumes points are already aligned with the origin
+    // (no points are negative, and some points touch both axes)
+    // pub fn canonical_clone_with_grid(&self, rotations: &[Rotation2<i8>]) -> ShapeMinimal {
+    //     let (rotation, realign_offset, bounds, _) = rotations.iter()
+    //         .map(|rotation| {
+    //             // calculate how to offset the shape post-rotation
+    //             // such that it's aligned with the origin again
+    //             let rotated_bounds: Vector2<i8> = rotation * self.bounds;
+    //             let realign_offset: Vector2<i8> = Vector2::new(
+    //                 -min(rotated_bounds.x, 0),
+    //                 -min(rotated_bounds.y, 0),
+    //             );
+    //             let realigned_bounds = rotated_bounds.abs();
+    //
+    //             // create 1-hot grid by setting each bit to 1 where there is a point
+    //             let mut grid = vec![0; realigned_bounds.y as usize + 1];
+    //             for point in &self.points {
+    //                 let point_rotated = rotation * point + realign_offset;
+    //                 grid[point_rotated.y as usize] |= 0x1 << point_rotated.x
+    //             }
+    //
+    //             (rotation, realign_offset, realigned_bounds, grid)
+    //         })
+    //         .min_by(|(_, _, _, grid1), (_, _, _, grid2)| grid1.cmp(grid2))
+    //         .unwrap();
+    //
+    //     let points = self.points.iter()
+    //         .map(|p| rotation * p + realign_offset)
+    //         .collect_vec();
+    //
+    //     ShapeMinimal { points, bounds }
+    // }
 }
 
 impl Hash for ShapeMinimal {
     fn hash<H>(&self, state: &mut H) where H: Hasher,
     {
-        self.points.hash(state);
-    }
-}
+        for point in &self.points {
+            // let bounds = self.max - self.min;
 
-#[cfg(test)]
-mod test {
-    use nalgebra::Vector2;
+            // calculate how to offset the shape post-rotation
+            // such that it's aligned with the origin again
+            // let rotated_bounds: Vector2<i8> = self.rot * bounds;
+            // let realign_offset: Vector2<i8> = Vector2::new(
+            //     -min(rotated_bounds.x, 0),
+            //     -min(rotated_bounds.y, 0),
+            // );
+            // let realigned_bounds = rotated_bounds.abs();
 
-    use crate::poly_2d::rotation::ROTATIONS8;
-    use crate::poly_2d::shape::shape_minimal::ShapeMinimal;
-
-    //  xxx
-    // xx
-    fn rot0() -> ShapeMinimal {
-        ShapeMinimal {
-            points: vec![
-                Vector2::new(0, 0),
-                Vector2::new(1, 0),
-                Vector2::new(1, 1),
-                Vector2::new(2, 1),
-                Vector2::new(3, 1),
-            ],
-            bounds: Vector2::new(3, 1),
-        }
-    }
-
-    // x
-    // x
-    // xx
-    //  x
-    fn rot90() -> ShapeMinimal {
-        ShapeMinimal {
-            points: vec![
-                Vector2::new(1, 0),
-                Vector2::new(1, 1),
-                Vector2::new(0, 1),
-                Vector2::new(0, 2),
-                Vector2::new(0, 3),
-            ],
-            bounds: Vector2::new(1, 3),
-        }
-    }
-
-    //   xx
-    // xxx
-    fn rot180() -> ShapeMinimal {
-        ShapeMinimal {
-            points: vec![
-                Vector2::new(3, 1),
-                Vector2::new(2, 1),
-                Vector2::new(2, 0),
-                Vector2::new(1, 0),
-                Vector2::new(0, 0),
-            ],
-            bounds: Vector2::new(3, 1),
-        }
-    }
-
-    // x
-    // xx
-    //  x
-    //  x
-    fn rot270() -> ShapeMinimal {
-        ShapeMinimal {
-            points: vec![
-                Vector2::new(0, 3),
-                Vector2::new(0, 2),
-                Vector2::new(1, 2),
-                Vector2::new(1, 1),
-                Vector2::new(1, 0),
-            ],
-            bounds: Vector2::new(1, 3),
-        }
-    }
-
-    #[test]
-    fn should_canonicalize() {
-        for shape in [
-            rot0(),
-            rot90(),
-            rot180(),
-            rot270()
-        ] {
-            assert_eq!(
-                shape.canonical_clone_with_grid(ROTATIONS8),
-                rot270()
-            );
+            // let point_rotated = point - self.min;
+            state.write_i8(point.x);
+            state.write_i8(point.y);
         }
     }
 }
+
+// #[cfg(test)]
+// mod test {
+//     use std::collections::hash_map::DefaultHasher;
+//     use std::hash::{Hash, Hasher};
+//
+//     use itertools::Itertools;
+//     use nalgebra::Vector2;
+//
+//     use crate::poly_2d::rotation::ROTATIONS8;
+//     use crate::poly_2d::shape::shape_minimal::ShapeMinimal;
+//
+//     //  xxx
+//     // xx
+//     fn rot0() -> Vec<Vector2<i8>> {
+//         vec![
+//             Vector2::new(0, 0),
+//             Vector2::new(1, 0),
+//             Vector2::new(1, 1),
+//             Vector2::new(2, 1),
+//             Vector2::new(3, 1),
+//         ]
+//     }
+//
+//     // x
+//     // x
+//     // xx
+//     //  x
+//     fn rot90() -> Vec<Vector2<i8>> {
+//         vec![
+//             Vector2::new(1, 0),
+//             Vector2::new(1, 1),
+//             Vector2::new(0, 1),
+//             Vector2::new(0, 2),
+//             Vector2::new(0, 3),
+//         ]
+//     }
+//
+//     //   xx
+//     // xxx
+//     fn rot180() -> Vec<Vector2<i8>> {
+//         vec![
+//             Vector2::new(3, 1),
+//             Vector2::new(2, 1),
+//             Vector2::new(2, 0),
+//             Vector2::new(1, 0),
+//             Vector2::new(0, 0),
+//         ]
+//     }
+//
+//     // x
+//     // xx
+//     //  x
+//     //  x
+//     fn rot270() -> Vec<Vector2<i8>> {
+//         vec![
+//             Vector2::new(0, 3),
+//             Vector2::new(0, 2),
+//             Vector2::new(1, 2),
+//             Vector2::new(1, 1),
+//             Vector2::new(1, 0),
+//         ]
+//     }
+//
+//     #[test]
+//     fn should_canonicalize() {
+//         assert_eq!(
+//             ShapeMinimal::new(rot0()),
+//             ShapeMinimal {
+//                 points: rot0(),
+//                 rot: &ROTATIONS8[3],
+//                 min: Vector2::new(0, 0),
+//                 max: Vector2::new(3, 1),
+//             }
+//         );
+//
+//         assert_eq!(
+//             ShapeMinimal::new(rot90()),
+//             ShapeMinimal {
+//                 points: rot90(),
+//                 rot: &ROTATIONS8[2],
+//                 min: Vector2::new(0, 0),
+//                 max: Vector2::new(1, 3),
+//             }
+//         );
+//
+//         assert_eq!(
+//             ShapeMinimal::new(rot180()),
+//             ShapeMinimal {
+//                 points: rot180(),
+//                 rot: &ROTATIONS8[1],
+//                 min: Vector2::new(0, 0),
+//                 max: Vector2::new(3, 1),
+//             }
+//         );
+//
+//         assert_eq!(
+//             ShapeMinimal::new(rot270()),
+//             ShapeMinimal {
+//                 points: rot270(),
+//                 rot: &ROTATIONS8[0],
+//                 min: Vector2::new(0, 0),
+//                 max: Vector2::new(1, 3),
+//             }
+//         );
+//
+//         // non-zero min
+//         let rot180_minus_one_one = rot180().iter()
+//             .map(|p| p - Vector2::new(1, 1))
+//             .collect_vec();
+//         assert_eq!(
+//             ShapeMinimal::new(rot180_minus_one_one.clone()),
+//             ShapeMinimal {
+//                 points: rot180(),
+//                 rot: &ROTATIONS8[1],
+//                 min: Vector2::new(0, 0),
+//                 max: Vector2::new(3, 1),
+//             }
+//         );
+//
+//         // hashcode
+//         assert_eq!(
+//             hash_shape_minimal(&ShapeMinimal::new(rot180_minus_one_one.clone())),
+//             hash_shape_minimal(&ShapeMinimal::new(rot180())),
+//         );
+//
+//         // equals
+//         assert_eq!(
+//             ShapeMinimal::new(rot180_minus_one_one.clone()),
+//             ShapeMinimal::new(rot180()),
+//         );
+//
+//         // level 2
+//         assert_eq!(
+//             ShapeMinimal::new(vec![
+//                 Vector2::new(1, 0),
+//                 Vector2::new(0, 0)
+//             ]),
+//             ShapeMinimal::new(vec![
+//                 Vector2::new(0, 0),
+//                 Vector2::new(0, 1)
+//             ]),
+//         );
+//     }
+//
+//     fn hash_shape_minimal(shape: &ShapeMinimal) -> u64 {
+//         let mut hasher = DefaultHasher::new();
+//         shape.hash(&mut hasher);
+//         hasher.finish()
+//     }
+// }
