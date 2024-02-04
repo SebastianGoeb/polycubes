@@ -8,9 +8,6 @@ use crate::poly_2d::rotation::ROTATIONS8;
 #[derive(Debug, PartialEq, Eq)]
 pub struct ShapeMinimal {
     pub points: Vec<Vector2<i8>>,
-    // rot: &'static Rotation2<i8>,
-    // min: Vector2<i8>,
-    // max: Vector2<i8>,
 }
 
 impl ShapeMinimal {
@@ -28,20 +25,10 @@ impl ShapeMinimal {
             *p = rot * (*p - min) + realign_offset;
         }
         points.sort_by(|a, b| a.x.cmp(&b.x).then(a.y.cmp(&b.y)));
-        let max: Vector2<i8> = Vector2::new(
-            points.iter().map(|p| p.x).max().unwrap(),
-            points.iter().map(|p| p.y).max().unwrap(),
-        );
-        let res = ShapeMinimal {
-            points,
-            // rot, min: Vector2::new(0, 0), max
-        };
-        // println!("canonical result: {:?}", res);
-        res
+        ShapeMinimal { points }
     }
 
     fn canonical_rotation(points: &[Vector2<i8>], minp: &Vector2<i8>, maxp: &Vector2<i8>) -> (&'static Rotation2<i8>, Vector2<i8>) {
-        // println!("\ncanonicalizing {:?}", points);
         let (_, rotation, realign_offset) = ROTATIONS8.iter()
             .map(|rotation| {
                 let bounds = maxp - minp;
@@ -62,74 +49,19 @@ impl ShapeMinimal {
                     grid[point_rotated.y as usize] |= 0x1 << point_rotated.x
                 }
 
-                // println!("rotation: {:?}", &rotation);
-                for v in &grid {
-                    // println!("{:4b}", v);
-                }
-
                 (grid, rotation, realign_offset)
             })
             .min_by(|a, b| a.0.cmp(&b.0))
             .unwrap();
 
-        // println!("canonical rotation: {:?}", &rotation);
-
         (rotation, realign_offset)
     }
-
-    // assumes points are already aligned with the origin
-    // (no points are negative, and some points touch both axes)
-    // pub fn canonical_clone_with_grid(&self, rotations: &[Rotation2<i8>]) -> ShapeMinimal {
-    //     let (rotation, realign_offset, bounds, _) = rotations.iter()
-    //         .map(|rotation| {
-    //             // calculate how to offset the shape post-rotation
-    //             // such that it's aligned with the origin again
-    //             let rotated_bounds: Vector2<i8> = rotation * self.bounds;
-    //             let realign_offset: Vector2<i8> = Vector2::new(
-    //                 -min(rotated_bounds.x, 0),
-    //                 -min(rotated_bounds.y, 0),
-    //             );
-    //             let realigned_bounds = rotated_bounds.abs();
-    //
-    //             // create 1-hot grid by setting each bit to 1 where there is a point
-    //             let mut grid = vec![0; realigned_bounds.y as usize + 1];
-    //             for point in &self.points {
-    //                 let point_rotated = rotation * point + realign_offset;
-    //                 grid[point_rotated.y as usize] |= 0x1 << point_rotated.x
-    //             }
-    //
-    //             (rotation, realign_offset, realigned_bounds, grid)
-    //         })
-    //         .min_by(|(_, _, _, grid1), (_, _, _, grid2)| grid1.cmp(grid2))
-    //         .unwrap();
-    //
-    //     let points = self.points.iter()
-    //         .map(|p| rotation * p + realign_offset)
-    //         .collect_vec();
-    //
-    //     ShapeMinimal { points, bounds }
-    // }
 }
 
 impl Hash for ShapeMinimal {
     fn hash<H>(&self, state: &mut H) where H: Hasher,
     {
-        for point in &self.points {
-            // let bounds = self.max - self.min;
-
-            // calculate how to offset the shape post-rotation
-            // such that it's aligned with the origin again
-            // let rotated_bounds: Vector2<i8> = self.rot * bounds;
-            // let realign_offset: Vector2<i8> = Vector2::new(
-            //     -min(rotated_bounds.x, 0),
-            //     -min(rotated_bounds.y, 0),
-            // );
-            // let realigned_bounds = rotated_bounds.abs();
-
-            // let point_rotated = point - self.min;
-            state.write_i8(point.x);
-            state.write_i8(point.y);
-        }
+        self.points.hash(state);
     }
 }
 

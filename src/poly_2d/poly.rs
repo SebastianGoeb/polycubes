@@ -3,8 +3,8 @@ use std::{
     time::Instant,
 };
 
-use itertools::Itertools;
 use lazy_static::lazy_static;
+use log::{debug, info};
 use nalgebra::Vector2;
 use rayon::prelude::*;
 
@@ -20,7 +20,7 @@ lazy_static! {
 pub fn generate_polys(cli: Poly2d) {
     let alg = cli.algorithm.clone().unwrap_or(Algorithm::A32);
 
-    println!("generating polycubes (in 2d) up to size {} with algorithm {}", cli.max_n, alg);
+    info!("generating polycubes (in 2d) up to size {} with algorithm {}", cli.max_n, alg);
 
     match alg {
         Algorithm::A32 => {
@@ -30,16 +30,7 @@ pub fn generate_polys(cli: Poly2d) {
             }
         }
         Algorithm::B8 => {
-            let polys = generate_shape_minimal_up_to(cli.max_n);
-            if cli.report_polys {
-                for (size, polys_level) in polys.iter()
-                    .sorted_by(|a, b| a.0.cmp(b.0)) {
-                    println!("\nsize: {}", size);
-                    for p in polys_level {
-                        println!("{:?}", p);
-                    }
-                }
-            }
+            generate_shape_minimal_up_to(cli.max_n);
         }
     }
 }
@@ -48,6 +39,7 @@ fn generate_shape_with_grid_up_to(max_n: usize) -> HashMap<usize, HashSet<ShapeW
     let mut known_polys: HashMap<usize, HashSet<ShapeWithGrid>> = HashMap::new();
     for n in 1..=max_n {
         let polys = generate_shape_with_grid_level(n, &known_polys);
+        for p in &polys { debug!("{:?}", p) }
         known_polys.entry(n).or_insert(polys);
     }
     known_polys
@@ -58,10 +50,9 @@ fn generate_shape_with_grid_level(
     known_polys: &HashMap<usize, HashSet<ShapeWithGrid>>,
 ) -> HashSet<ShapeWithGrid> {
     let start = Instant::now();
-    print!("size: {: >2}... ", n);
 
     if n == 1 {
-        report_performance(start, 1, 1, 1);
+        report_performance(n, start, 1, 1, 1);
         return HashSet::from([ShapeWithGrid::canonical(vec![Vector2::new(0, 0)])]);
     }
 
@@ -101,7 +92,7 @@ fn generate_shape_with_grid_level(
         );
 
     let new_polys = result.2;
-    report_performance(start, result.0, result.1, new_polys.len());
+    report_performance(n, start, result.0, result.1, new_polys.len());
     new_polys
 }
 
@@ -109,6 +100,7 @@ fn generate_shape_minimal_up_to(max_n: usize) -> HashMap<usize, HashSet<ShapeMin
     let mut known_polys: HashMap<usize, HashSet<ShapeMinimal>> = HashMap::new();
     for n in 1..=max_n {
         let polys = generate_shape_minimal_level(n, &known_polys);
+        for p in &polys { debug!("{:?}", p) }
         known_polys.entry(n).or_insert(polys);
     }
     known_polys
@@ -119,10 +111,9 @@ fn generate_shape_minimal_level(
     known_polys: &HashMap<usize, HashSet<ShapeMinimal>>,
 ) -> HashSet<ShapeMinimal> {
     let start = Instant::now();
-    print!("size: {: >2}... ", n);
 
     if n == 1 {
-        report_performance(start, 1, 1, 1);
+        report_performance(n, start, 1, 1, 1);
         return HashSet::from([ShapeMinimal::new(vec![Vector2::new(0, 0)])]);
     }
 
@@ -162,11 +153,11 @@ fn generate_shape_minimal_level(
         );
 
     let new_polys = result.2;
-    report_performance(start, result.0, result.1, new_polys.len());
+    report_performance(n, start, result.0, result.1, new_polys.len());
     new_polys
 }
 
-fn report_performance(start: Instant, points_tried: usize, polys_tried: usize, found: usize) {
+fn report_performance(size: usize, start: Instant, points_tried: usize, polys_tried: usize, found: usize) {
     let dur = start.elapsed();
 
     let points_tried_string = format!(
@@ -196,8 +187,9 @@ fn report_performance(start: Instant, points_tried: usize, polys_tried: usize, f
         )
     );
 
-    println!(
-        "time: {}s {: <40} {: <40} {: <40}",
+    info!(
+        "size: {: >2}    time: {}s    {: <40} {: <40} {: <40}",
+        size,
         dur.as_secs(),
         points_tried_string,
         polys_tried_string,
@@ -207,9 +199,9 @@ fn report_performance(start: Instant, points_tried: usize, polys_tried: usize, f
 
 fn report_polys(cli: Poly2d, known_polys: HashMap<usize, HashSet<ShapeWithGrid>>) {
     for n in 1..=cli.max_n {
-        println!("Polys with size n={}", n);
+        info!("Polys with size n={}", n);
         for poly in &known_polys[&n] {
-            println!("{}", &poly);
+            info!("{}", &poly);
         }
     }
 }
