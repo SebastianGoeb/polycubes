@@ -4,7 +4,7 @@ use std::{
 };
 
 use lazy_static::lazy_static;
-use log::{debug, info};
+use log::{debug, info, log_enabled};
 use nalgebra::Vector2;
 use rayon::prelude::*;
 
@@ -39,7 +39,9 @@ fn generate_shape_with_grid_up_to(max_n: usize) -> HashMap<usize, HashSet<ShapeW
     let mut known_polys: HashMap<usize, HashSet<ShapeWithGrid>> = HashMap::new();
     for n in 1..=max_n {
         let polys = generate_shape_with_grid_level(n, &known_polys);
-        for p in &polys { debug!("{:?}", p) }
+        if log_enabled!(log::Level::Debug) {
+            for p in &polys { debug!("{:?}", p) }
+        }
         known_polys.entry(n).or_insert(polys);
     }
     known_polys
@@ -100,7 +102,9 @@ fn generate_shape_minimal_up_to(max_n: usize) -> HashMap<usize, HashSet<ShapeMin
     let mut known_polys: HashMap<usize, HashSet<ShapeMinimal>> = HashMap::new();
     for n in 1..=max_n {
         let polys = generate_shape_minimal_level(n, &known_polys);
-        for p in &polys { debug!("{:?}", p) }
+        if log_enabled!(log::Level::Debug) {
+            for p in &polys { debug!("{:?}", p) }
+        }
         known_polys.entry(n).or_insert(polys);
     }
     known_polys
