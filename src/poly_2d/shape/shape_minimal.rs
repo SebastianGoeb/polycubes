@@ -5,14 +5,14 @@ use nalgebra::{Rotation2, Vector2};
 
 use crate::poly_2d::rotation::ROTATIONS8;
 
-fn min_vector2(points: &Vec<Vector2<i8>>) -> Vector2<i8> {
+fn min_vector2(points: &[Vector2<i8>]) -> Vector2<i8> {
     Vector2::new(
         points.iter().map(|p| p.x).min().unwrap(),
         points.iter().map(|p| p.y).min().unwrap(),
     )
 }
 
-fn max_vector2(points: &Vec<Vector2<i8>>) -> Vector2<i8> {
+fn max_vector2(points: &[Vector2<i8>]) -> Vector2<i8> {
     Vector2::new(
         points.iter().map(|p| p.x).max().unwrap(),
         points.iter().map(|p| p.y).max().unwrap(),
