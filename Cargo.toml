@@ -8,7 +8,7 @@ inherits = "release"
 debug = true
 
 [dependencies]
-clap = { version = "4.5.2", features = ["derive"] }
+clap = { version = "4.5.3", features = ["derive"] }
 format_num = "0.1.0"
 itertools = "0.12.1"
 lazy_static = "1.4.0"
