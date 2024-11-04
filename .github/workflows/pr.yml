@@ -50,7 +50,7 @@ jobs:
       - name: Run tests and generate coverage
         run: cargo nextest run --profile ci
 
-      - uses: mikepenz/action-junit-report@v4
+      - uses: mikepenz/action-junit-report@v5
         if: always()
         with:
           check_name: test
