@@ -8,10 +8,9 @@ pub struct BoundingBoxTwoPoints {
     pub p1: Vector2<i32>,
 }
 
-
 impl BoundingBoxTwoPoints {
     pub fn from(points: &[Vector2<i32>]) -> BoundingBoxTwoPoints {
-        return BoundingBoxTwoPoints {
+        BoundingBoxTwoPoints {
             p0: Vector2::new(
                 points.iter().map(|p| p.x).min().unwrap(),
                 points.iter().map(|p| p.y).min().unwrap(),
@@ -20,7 +19,7 @@ impl BoundingBoxTwoPoints {
                 points.iter().map(|p| p.x).max().unwrap(),
                 points.iter().map(|p| p.y).max().unwrap(),
             ),
-        };
+        }
     }
 
     pub fn min(&self) -> Vector2<i32> {
