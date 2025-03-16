@@ -39,7 +39,7 @@ jobs:
             ~/.cargo/registry/cache/
             ~/.cargo/git/db/
             target/
-          key: cargo-repo-${{ runner.os }}-${{ hashFiles('**/Cargo.toml') }}
+          key: cargo-repo-${{ runner.os }}-${{ hashFiles('Cargo.toml') }}-${{ hashFiles('**/Cargo.toml') }}
 
       - name: Install more cargo tools
         uses: taiki-e/install-action@v2
