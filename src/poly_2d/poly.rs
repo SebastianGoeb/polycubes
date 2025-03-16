@@ -1,15 +1,18 @@
+use lazy_static::lazy_static;
+use log::{debug, info, log_enabled};
+use nalgebra::{SVector, Vector2};
+use num::{Integer, Zero};
+use rayon::prelude::*;
+use std::fmt::Debug;
+use std::ops::AddAssign;
 use std::{
     collections::{HashMap, HashSet},
     time::Instant,
 };
 
-use lazy_static::lazy_static;
-use log::{debug, info, log_enabled};
-use nalgebra::Vector2;
-use rayon::prelude::*;
-
 use crate::cli::{Algorithm, Poly2d};
 use crate::poly_2d::moves::{MOVES32, MOVES8};
+use crate::poly_2d::shape::shape_generic::ShapeN;
 use crate::poly_2d::shape::shape_minimal::ShapeMinimal;
 use crate::poly_2d::shape::shape_with_grid::ShapeWithGrid;
 
@@ -20,65 +23,84 @@ lazy_static! {
 pub fn generate_polys(cli: Poly2d) {
     let alg = cli.algorithm.clone().unwrap_or(Algorithm::A32);
 
-    info!("generating polycubes (in 2d) up to size {} with algorithm {}", cli.max_n, alg);
+    info!(
+        "generating polycubes (in 2d) up to size {} with algorithm {}",
+        cli.max_n, alg
+    );
 
     match alg {
         Algorithm::A32 => {
-            let polys = generate_shape_with_grid_up_to(cli.max_n);
+            let polys = generate_shapes_up_to_size::<ShapeWithGrid, i32>(cli.max_n, MOVES32);
             if cli.report_polys {
                 report_polys(cli, polys);
             }
         }
         Algorithm::B8 => {
-            generate_shape_minimal_up_to(cli.max_n);
+            generate_shapes_up_to_size::<ShapeMinimal, i8>(cli.max_n, MOVES8);
         }
     }
 }
 
-fn generate_shape_with_grid_up_to(max_n: usize) -> HashMap<usize, HashSet<ShapeWithGrid>> {
-    let mut known_polys: HashMap<usize, HashSet<ShapeWithGrid>> = HashMap::new();
+fn generate_shapes_up_to_size<S, T>(
+    max_n: usize,
+    moves: &[SVector<T, 2>],
+) -> HashMap<usize, HashSet<S>>
+where
+    S: ShapeN<T, 2>,
+    T: Integer + Zero + Clone + Debug + AddAssign + Send + Sync + 'static,
+{
+    let mut known_polys: HashMap<usize, HashSet<S>> = HashMap::new();
     for n in 1..=max_n {
-        let polys = generate_shape_with_grid_level(n, &known_polys);
+        let polys = generate_shapes_with_size(n, &known_polys, moves);
         if log_enabled!(log::Level::Debug) {
-            for p in &polys { debug!("{:?}", p) }
+            for p in &polys {
+                debug!("{:?}", p)
+            }
         }
         known_polys.entry(n).or_insert(polys);
     }
     known_polys
 }
 
-fn generate_shape_with_grid_level(
+fn generate_shapes_with_size<S, T>(
     n: usize,
-    known_polys: &HashMap<usize, HashSet<ShapeWithGrid>>,
-) -> HashSet<ShapeWithGrid> {
+    known_polys: &HashMap<usize, HashSet<S>>,
+    moves: &[SVector<T, 2>],
+) -> HashSet<S>
+where
+    S: ShapeN<T, 2>,
+    T: Integer + Zero + Clone + Debug + AddAssign + Send + Sync + 'static,
+{
     let start = Instant::now();
 
     if n == 1 {
         report_performance(n, start, 1, 1, 1);
-        return HashSet::from([ShapeWithGrid::canonical(vec![Vector2::new(0, 0)])]);
+        return HashSet::from([S::new(vec![Vector2::new(T::zero(), T::zero())])]);
     }
 
-    let prev_polys: &HashSet<ShapeWithGrid> = &known_polys[&(n - 1)];
-    let result: (usize, usize, HashSet<ShapeWithGrid>) = prev_polys
+    let prev_polys: &HashSet<S> = &known_polys[&(n - 1)];
+    let result: (usize, usize, HashSet<S>) = prev_polys
         .par_iter()
         .fold(
-            || (0, 0, HashSet::<ShapeWithGrid>::new()),
+            || (0, 0, HashSet::<S>::new()),
             |(mut points_tried, mut polys_tried, mut new_polys), prev_poly| {
-                for p in &prev_poly.points {
-                    for m in MOVES32 {
+                let points = prev_poly.points();
+                for p in points {
+                    for m in moves {
                         points_tried += 1;
                         let new_point = p + m;
-                        if prev_poly.points.contains(&new_point) {
+                        if points.contains(&new_point) {
                             continue;
                         }
 
                         polys_tried += 1;
                         // cloning then pushing would force an unnecessary grow, so we initialize with the correct size
-                        let mut new_points = Vec::with_capacity(prev_poly.points.len() + 1);
-                        new_points.extend(&prev_poly.points);
+                        let mut new_points: Vec<SVector<T, 2>> =
+                            Vec::with_capacity(points.len() + 1);
+                        new_points.extend_from_slice(points);
                         new_points.push(new_point);
 
-                        let new_poly = ShapeWithGrid::canonical(new_points);
+                        let new_poly = S::new(new_points);
                         new_polys.insert(new_poly);
                     }
                 }
@@ -86,7 +108,7 @@ fn generate_shape_with_grid_level(
             },
         )
         .reduce(
-            || (0, 0, HashSet::<ShapeWithGrid>::new()),
+            || (0, 0, HashSet::<S>::new()),
             |mut a, b| {
                 a.2.extend(b.2);
                 (a.0 + b.0, a.1 + b.1, a.2)
@@ -98,70 +120,13 @@ fn generate_shape_with_grid_level(
     new_polys
 }
 
-fn generate_shape_minimal_up_to(max_n: usize) -> HashMap<usize, HashSet<ShapeMinimal>> {
-    let mut known_polys: HashMap<usize, HashSet<ShapeMinimal>> = HashMap::new();
-    for n in 1..=max_n {
-        let polys = generate_shape_minimal_level(n, &known_polys);
-        if log_enabled!(log::Level::Debug) {
-            for p in &polys { debug!("{:?}", p) }
-        }
-        known_polys.entry(n).or_insert(polys);
-    }
-    known_polys
-}
-
-fn generate_shape_minimal_level(
-    n: usize,
-    known_polys: &HashMap<usize, HashSet<ShapeMinimal>>,
-) -> HashSet<ShapeMinimal> {
-    let start = Instant::now();
-
-    if n == 1 {
-        report_performance(n, start, 1, 1, 1);
-        return HashSet::from([ShapeMinimal::new(vec![Vector2::new(0, 0)])]);
-    }
-
-    let prev_polys: &HashSet<ShapeMinimal> = &known_polys[&(n - 1)];
-    let result: (usize, usize, HashSet<ShapeMinimal>) = prev_polys
-        .par_iter()
-        .fold(
-            || (0, 0, HashSet::<ShapeMinimal>::new()),
-            |(mut points_tried, mut polys_tried, mut new_polys), prev_poly| {
-                for p in &prev_poly.points {
-                    for m in MOVES8 {
-                        points_tried += 1;
-                        let new_point = p + m;
-                        if prev_poly.points.contains(&new_point) {
-                            continue;
-                        }
-
-                        polys_tried += 1;
-                        // cloning then pushing would force an unnecessary grow, so we initialize with the correct size
-                        let mut new_points = Vec::with_capacity(prev_poly.points.len() + 1);
-                        new_points.extend(&prev_poly.points);
-                        new_points.push(new_point);
-
-                        let new_poly = ShapeMinimal::new(new_points);
-                        new_polys.insert(new_poly);
-                    }
-                }
-                (points_tried, polys_tried, new_polys)
-            },
-        )
-        .reduce(
-            || (0, 0, HashSet::<ShapeMinimal>::new()),
-            |mut a, b| {
-                a.2.extend(b.2);
-                (a.0 + b.0, a.1 + b.1, a.2)
-            },
-        );
-
-    let new_polys = result.2;
-    report_performance(n, start, result.0, result.1, new_polys.len());
-    new_polys
-}
-
-fn report_performance(size: usize, start: Instant, points_tried: usize, polys_tried: usize, found: usize) {
+fn report_performance(
+    size: usize,
+    start: Instant,
+    points_tried: usize,
+    polys_tried: usize,
+    found: usize,
+) {
     let dur = start.elapsed();
 
     let points_tried_string = format!(
