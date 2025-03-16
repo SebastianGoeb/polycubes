@@ -1,7 +1,7 @@
 use std::cmp::{max, min};
 
 use ndarray::*;
-use rand::{seq::SliceRandom, thread_rng};
+use rand::{rng, seq::SliceRandom};
 
 use super::common::{BoundingBox, Shape};
 
@@ -30,7 +30,7 @@ fn grow_random_snake_2d(size: usize) -> Shape {
         // decide random direction
         // TODO optimize constant shuffling
         let mut directions: Vec<(isize, isize)> = vec![(0, 1), (0, -1), (1, 0), (-1, 0)];
-        let mut rng = thread_rng();
+        let mut rng = rng();
         directions.shuffle(&mut rng);
 
         let new_location: Option<(usize, usize)> = directions
