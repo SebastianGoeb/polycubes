@@ -11,4 +11,6 @@ where
     fn new(points: Vec<SVector<T, D>>) -> Self;
 
     fn points(&self) -> &[SVector<T, D>];
+
+    fn moves() -> &'static [SVector<T, 2>];
 }

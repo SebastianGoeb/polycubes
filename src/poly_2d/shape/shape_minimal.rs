@@ -1,10 +1,10 @@
 use std::cmp::min;
 use std::hash::{Hash, Hasher};
 
-use nalgebra::{Rotation2, SVector, Vector2};
-
+use crate::poly_2d::moves::MOVES8;
 use crate::poly_2d::rotation::ROTATIONS8;
 use crate::poly_2d::shape::shape_generic::ShapeN;
+use nalgebra::{Rotation2, SVector, Vector2};
 
 fn min_vector2(points: &[Vector2<i8>]) -> Vector2<i8> {
     Vector2::new(
@@ -39,6 +39,10 @@ impl ShapeN<i8, 2> for ShapeMinimal {
 
     fn points(&self) -> &[SVector<i8, 2>] {
         &self.points
+    }
+
+    fn moves() -> &'static [SVector<i8, 2>] {
+        MOVES8
     }
 }
 

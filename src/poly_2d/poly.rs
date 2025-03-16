@@ -11,7 +11,6 @@ use std::{
 };
 
 use crate::cli::{Algorithm, Poly2d};
-use crate::poly_2d::moves::{MOVES32, MOVES8};
 use crate::poly_2d::shape::shape_generic::ShapeN;
 use crate::poly_2d::shape::shape_minimal::ShapeMinimal;
 use crate::poly_2d::shape::shape_with_grid::ShapeWithGrid;
@@ -30,28 +29,25 @@ pub fn generate_polys(cli: Poly2d) {
 
     match alg {
         Algorithm::A32 => {
-            let polys = generate_shapes_up_to_size::<ShapeWithGrid, i32>(cli.max_n, MOVES32);
+            let polys = generate_shapes_up_to_size::<ShapeWithGrid, i32>(cli.max_n);
             if cli.report_polys {
                 report_polys(cli, polys);
             }
         }
         Algorithm::B8 => {
-            generate_shapes_up_to_size::<ShapeMinimal, i8>(cli.max_n, MOVES8);
+            generate_shapes_up_to_size::<ShapeMinimal, i8>(cli.max_n);
         }
     }
 }
 
-fn generate_shapes_up_to_size<S, T>(
-    max_n: usize,
-    moves: &[SVector<T, 2>],
-) -> HashMap<usize, HashSet<S>>
+fn generate_shapes_up_to_size<S, T>(max_n: usize) -> HashMap<usize, HashSet<S>>
 where
     S: ShapeN<T, 2>,
     T: Integer + Zero + Clone + Debug + AddAssign + Send + Sync + 'static,
 {
     let mut known_polys: HashMap<usize, HashSet<S>> = HashMap::new();
     for n in 1..=max_n {
-        let polys = generate_shapes_with_size(n, &known_polys, moves);
+        let polys = generate_shapes_with_size(n, &known_polys);
         if log_enabled!(log::Level::Debug) {
             for p in &polys {
                 debug!("{:?}", p)
@@ -62,16 +58,14 @@ where
     known_polys
 }
 
-fn generate_shapes_with_size<S, T>(
-    n: usize,
-    known_polys: &HashMap<usize, HashSet<S>>,
-    moves: &[SVector<T, 2>],
-) -> HashSet<S>
+fn generate_shapes_with_size<S, T>(n: usize, known_polys: &HashMap<usize, HashSet<S>>) -> HashSet<S>
 where
     S: ShapeN<T, 2>,
     T: Integer + Zero + Clone + Debug + AddAssign + Send + Sync + 'static,
 {
     let start = Instant::now();
+
+    let moves = S::moves();
 
     if n == 1 {
         report_performance(n, start, 1, 1, 1);
