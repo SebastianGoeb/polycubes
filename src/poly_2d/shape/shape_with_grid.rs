@@ -1,10 +1,11 @@
 use std::fmt::Display;
 use std::hash::{Hash, Hasher};
 
-use nalgebra::{Rotation2, Vector2};
-
+use crate::poly_2d::moves::MOVES32;
 use crate::poly_2d::rotation::ROTATIONS32;
 use crate::poly_2d::shape::bounding_box_two_points::BoundingBoxTwoPoints;
+use crate::poly_2d::shape::shape_generic::ShapeN;
+use nalgebra::{Rotation2, SVector, Vector2};
 
 #[derive(Debug, Eq)]
 pub struct ShapeWithGrid {
@@ -13,8 +14,8 @@ pub struct ShapeWithGrid {
     pub grid: Vec<u64>,
 }
 
-impl ShapeWithGrid {
-    pub fn canonical(points: Vec<Vector2<i32>>) -> ShapeWithGrid {
+impl ShapeN<i32, 2> for ShapeWithGrid {
+    fn new(points: Vec<Vector2<i32>>) -> Self {
         // TODO cache and extend bounds instead of always recomputing
         let bounds = BoundingBoxTwoPoints::from(&points);
 
@@ -38,6 +39,14 @@ impl ShapeWithGrid {
             grid_bounds: best.0,
             grid: best.1,
         }
+    }
+
+    fn points(&self) -> &[SVector<i32, 2>] {
+        &self.points
+    }
+
+    fn moves() -> &'static [SVector<i32, 2>] {
+        MOVES32
     }
 }
 
@@ -69,10 +78,7 @@ impl PartialEq for ShapeWithGrid {
 }
 
 impl Hash for ShapeWithGrid {
-    fn hash<H>(&self, state: &mut H)
-        where
-            H: Hasher,
-    {
+    fn hash<H: Hasher>(&self, state: &mut H) {
         self.grid.hash(state);
     }
 }
@@ -90,4 +96,3 @@ impl Display for ShapeWithGrid {
         Ok(())
     }
 }
-
